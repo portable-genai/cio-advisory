@@ -1,0 +1,195 @@
+# CIO Advisory Assistant (B3) : runtime configuration.
+#
+# Three deployment profiles, selected by CIO_PROFILE (or profile: below):
+#   gcp    : Google Cloud managed services (lazy SDK imports). Production sets this explicitly.
+#   local  : a WORKING offline laptop stack (SQLite FTS5 + deterministic LLM,
+#            SDK-free, no API key, no emulator required). An unset CIO_PROFILE binds this
+#            adapter family so an offline process still starts, but it is not read as CHOOSING
+#            local: the seeded no-auth dev personas are refused and the localhost CORS
+#            fallback does not apply.
+#   onprem : fail-fast Google Distributed Cloud migration placeholders.
+# Nothing in src/cio_advisory/domain changes between profiles.
+
+project_id: ${GOOGLE_CLOUD_PROJECT:-your-gcp-project}
+region: asia-southeast1            # Singapore : Wealth / Private Bank data residency
+profile: ${CIO_PROFILE}            # gcp | local | live | platform | onprem. Deliberately has NO :-local fallback: an unset CIO_PROFILE must stay unset rather than materialising here as a written-down choice, because "nobody chose" and "chose local" get different postures. Prod deploys set CIO_PROFILE=gcp explicitly
+kms_key: ${CIO_KMS_KEY:-}          # regional Cloud KMS key for CMEK
+grounding_enabled: ${CIO_GROUNDING_ENABLED:-false}
+
+models:
+  reasoning: gemini-3.5-flash          # GA : talking-point synthesis (thinking=high)
+  triage: gemini-3.1-flash-lite        # GA : routing / guardrail pre-checks
+  hard_reasoning: gemini-3.1-pro       # Preview : OFF unless use_hard_reasoning=true
+  use_hard_reasoning: false
+
+house_views:
+  data_store_id: cio-house-views       # GCP File Search store (standalone gcp profile)
+  engine_id: cio-advisory-engine
+  location: asia-southeast1
+  serving_config: default_search
+
+bigquery:
+  dataset: wealth_portfolio
+  portfolio_table: holdings
+  profile_table: client_profiles
+  location: asia-southeast1
+
+model_armor:
+  template_id: cio-advisory-guardrail
+  host: modelarmor.asia-southeast1.rep.googleapis.com
+
+dlp:
+  inspect_template: ${CIO_DLP_INSPECT_TEMPLATE:-}
+  deidentify_template: ${CIO_DLP_DEIDENTIFY_TEMPLATE:-}
+
+# Which jurisdictions' national identifiers are redacted. Drives the local regex redactor,
+# the GCP DLP custom info types and the eval gate's pii_safety leak check from one pattern
+# source (domain/pii_patterns.py), so they cannot drift. Supported: SG, HK, JP, AU, IN, GB.
+# Override with CIO_PII_JURISDICTIONS (comma-separated).
+pii:
+  jurisdictions: ${CIO_PII_JURISDICTIONS:-SG,HK,JP,AU}
+
+logging:
+  log_name: cio-advisory-audit
+  bucket: cio-advisory-worm
+  retention_days: 2557               # ~7 years; bucket is locked (irreversible) in prod
+
+agent_engine:
+  resource_name: ${CIO_AGENT_ENGINE:-}
+  display_name: cio-advisory
+
+suitability:
+  concentration_limit: 0.40          # single-asset-class weight that flags REVIEW
+  aggressive_asset_classes: [equity, alternatives, real_assets]
+  complex_asset_classes: [alternatives, real_assets]
+
+# SDK-free 'local' profile stores. Empty => per-package defaults under
+# ~/.cio_advisory/ ; tests pass ':memory:' for ephemeral, deterministic stores.
+local:
+  db_path: ${CIO_LOCAL_DB:-}         # SQLite FTS5 house-view index
+  audit_path: ${CIO_LOCAL_AUDIT:-}   # append-only local audit store
+
+# The `live` profile: real grounded market research + a local model server on this
+# machine (MLX / Ollama / vLLM, any OpenAI-compatible /chat/completions endpoint).
+# House-view themes come from Gemini google_search research over real published market
+# commentary (needs GOOGLE_CLOUD_PROJECT + ADC and the [gcp] extra), cited to their
+# public sources; clients/portfolios are audience-registered (POST /v1/clients); the
+# fictional samples never appear.
+live:
+  llm_url: ${CIO_LIVE_LLM_URL:-http://127.0.0.1:8001/chat/completions}
+  llm_model: ${CIO_LIVE_LLM_MODEL:-mlx-community/gemma-4-26b-a4b-it-8bit}
+  timeout_seconds: ${CIO_LIVE_TIMEOUT:-240}
+  max_output_tokens: ${CIO_LIVE_MAX_TOKENS:-2048}
+  research_cache_path: ${CIO_LIVE_RESEARCH_CACHE:-}   # "" => ~/.cio_advisory/live-house-views.json
+  research_cache_ttl_seconds: ${CIO_LIVE_RESEARCH_TTL:-21600}  # 0 disables the cache
+
+# ----------------------------------------------------------------------------- #
+# Port -> adapter bindings. The container picks the entry for the active profile,
+# falling back to the 'gcp' entry. These dotted paths are the build contract:
+# each adapter class takes a single Settings argument.
+# ----------------------------------------------------------------------------- #
+adapters:
+  # End-user identity (authentication). local = seeded dev personas, NO IdP/AD/LDAP, so
+  # demos and tests run offline; gcp/platform = verify the IAP-injected signed assertion
+  # (auth configured ON the GCP service); onprem = client IdP placeholder. The resolved
+  # Principal supplies the audit actor, replacing any client-asserted actor.
+  identity:
+    gcp: cio_advisory.adapters.gcp.iap_identity:IapIdentityAdapter
+    platform: cio_advisory.adapters.gcp.iap_identity:IapIdentityAdapter
+    local: cio_advisory.adapters.local.identity:LocalPersonaIdentityAdapter
+    live: cio_advisory.adapters.local.identity:LocalPersonaIdentityAdapter
+    onprem: cio_advisory.adapters.onprem.identity:OnPremIdentityAdapter
+  house_view:
+    gcp: cio_advisory.adapters.gcp.file_search_house_views:FileSearchHouseViewAdapter
+    local: cio_advisory.adapters.local.house_views:LocalFtsHouseViewAdapter
+    live: cio_advisory.adapters.live.house_views:LiveGroundedHouseViewAdapter
+    platform: cio_advisory.adapters.platform.remote_house_views:RemoteHouseViewAdapter
+    onprem: cio_advisory.adapters.onprem.house_views:OnPremHouseViewAdapter
+  portfolio:
+    gcp: cio_advisory.adapters.gcp.bigquery_portfolio:BigQueryPortfolioAdapter
+    platform: cio_advisory.adapters.gcp.bigquery_portfolio:BigQueryPortfolioAdapter
+    local: cio_advisory.adapters.local.portfolio:LocalPortfolioAdapter
+    live: cio_advisory.adapters.local.portfolio:LocalPortfolioAdapter
+    onprem: cio_advisory.adapters.onprem.portfolio:OnPremPortfolioAdapter
+  llm:
+    gcp: cio_advisory.adapters.gcp.gemini_llm:GeminiLLMAdapter
+    platform: cio_advisory.adapters.gcp.gemini_llm:GeminiLLMAdapter
+    local: cio_advisory.adapters.local.llm:LocalDeterministicLLMAdapter
+    live: cio_advisory.adapters.live.llm:GemmaLocalLLMAdapter
+    onprem: cio_advisory.adapters.onprem.llm:OnPremLLMAdapter
+  grounding:
+    gcp: cio_advisory.adapters.gcp.gemini_grounding:GeminiGoogleSearchGroundingAdapter
+    platform: cio_advisory.adapters.gcp.gemini_grounding:GeminiGoogleSearchGroundingAdapter
+    local: cio_advisory.adapters.local.grounding:LocalDisabledGroundingAdapter
+    live: cio_advisory.adapters.gcp.gemini_grounding:GeminiGoogleSearchGroundingAdapter
+    onprem: cio_advisory.adapters.onprem.grounding:OnPremGroundingAdapter
+  guardrail:
+    gcp: cio_advisory.adapters.gcp.model_armor_guardrail:ModelArmorGuardrailAdapter
+    local: cio_advisory.adapters.local.guardrail:LocalHeuristicGuardrailAdapter
+    live: cio_advisory.adapters.local.guardrail:LocalHeuristicGuardrailAdapter
+    platform: cio_advisory.adapters.platform.remote_guardrail:RemoteGuardrailAdapter
+    onprem: cio_advisory.adapters.onprem.guardrail:OnPremGuardrailAdapter
+  redaction:
+    gcp: cio_advisory.adapters.gcp.dlp_redaction:DlpRedactionAdapter
+    local: cio_advisory.adapters.local.redaction:LocalRegexRedactionAdapter
+    live: cio_advisory.adapters.local.redaction:LocalRegexRedactionAdapter
+    platform: cio_advisory.adapters.platform.remote_redaction:RemoteRedactionAdapter
+    onprem: cio_advisory.adapters.onprem.redaction:OnPremRedactionAdapter
+  agent_runtime:
+    gcp: cio_advisory.adapters.gcp.agent_runtime:AgentRuntimeAdapter
+    platform: cio_advisory.adapters.gcp.agent_runtime:AgentRuntimeAdapter
+    local: cio_advisory.adapters.local.runtime:LocalAgentRuntimeAdapter
+    live: cio_advisory.adapters.local.runtime:LocalAgentRuntimeAdapter
+    onprem: cio_advisory.adapters.onprem.runtime:OnPremAgentRuntimeAdapter
+  session:
+    gcp: cio_advisory.adapters.gcp.vertex_sessions:VertexSessionsAdapter
+    platform: cio_advisory.adapters.gcp.vertex_sessions:VertexSessionsAdapter
+    local: cio_advisory.adapters.local.session:LocalSessionAdapter
+    live: cio_advisory.adapters.local.session:LocalSessionAdapter
+    onprem: cio_advisory.adapters.onprem.session:OnPremSessionAdapter
+  memory:
+    gcp: cio_advisory.adapters.gcp.vertex_memory_bank:VertexMemoryBankAdapter
+    platform: cio_advisory.adapters.gcp.vertex_memory_bank:VertexMemoryBankAdapter
+    local: cio_advisory.adapters.local.memory:LocalMemoryAdapter
+    live: cio_advisory.adapters.local.memory:LocalMemoryAdapter
+    onprem: cio_advisory.adapters.onprem.memory:OnPremMemoryAdapter
+  audit:
+    gcp: cio_advisory.adapters.gcp.cloud_logging_audit:CloudLoggingAuditAdapter
+    local: cio_advisory.adapters.local.audit:LocalAppendOnlyAuditAdapter
+    live: cio_advisory.adapters.local.audit:LocalAppendOnlyAuditAdapter
+    platform: cio_advisory.adapters.platform.remote_audit:RemoteAuditAdapter
+    onprem: cio_advisory.adapters.onprem.audit:OnPremAuditAdapter
+  tracer:
+    gcp: cio_advisory.adapters.gcp.cloud_trace_tracer:CloudTraceTracerAdapter
+    platform: cio_advisory.adapters.gcp.cloud_trace_tracer:CloudTraceTracerAdapter
+    local: cio_advisory.adapters.local.tracer:LocalNoopTracerAdapter
+    live: cio_advisory.adapters.local.tracer:LocalNoopTracerAdapter
+    onprem: cio_advisory.adapters.onprem.tracer:OnPremTracerAdapter
+  evaluation:
+    gcp: cio_advisory.adapters.gcp.genai_eval:GenAiEvalAdapter
+    local: cio_advisory.adapters.local.evaluation:LocalOfflineEvalAdapter
+    live: cio_advisory.adapters.local.evaluation:LocalOfflineEvalAdapter
+    platform: cio_advisory.adapters.platform.remote_eval_gate:RemoteEvalGateAdapter
+    onprem: cio_advisory.adapters.onprem.evaluation:OnPremEvalAdapter
+  registry:
+    gcp: cio_advisory.adapters.gcp.a2a_registry:A2ARegistryAdapter
+    local: cio_advisory.adapters.local.registry:LocalRegistryAdapter
+    live: cio_advisory.adapters.local.registry:LocalRegistryAdapter
+    platform: cio_advisory.adapters.platform.remote_registry:RemoteRegistryAdapter
+    onprem: cio_advisory.adapters.onprem.registry:OnPremRegistryAdapter
+  tool_catalog:
+    gcp: cio_advisory.adapters.gcp.mcp_tool_catalog:McpToolCatalogAdapter
+    platform: cio_advisory.adapters.gcp.mcp_tool_catalog:McpToolCatalogAdapter
+    local: cio_advisory.adapters.local.tool_catalog:LocalToolCatalogAdapter
+    live: cio_advisory.adapters.local.tool_catalog:LocalToolCatalogAdapter
+    onprem: cio_advisory.adapters.onprem.tool_catalog:OnPremToolCatalogAdapter
+  # Rule R8: an escalated advisory briefing (requires_human_review) is ROUTED to the Hrz7
+  # Human-Review & Maker-Checker Console via the shared review-kit, not left as a boolean.
+  # local enqueues to an in-memory outbox so the routing path runs offline; gcp/platform submit
+  # over S2S to Hrz7's service intake; onprem is the fail-fast sovereign-migration placeholder.
+  review_router:
+    gcp: cio_advisory.adapters.platform.review_router:PlatformReviewRouter
+    platform: cio_advisory.adapters.platform.review_router:PlatformReviewRouter
+    local: cio_advisory.adapters.local.review_router:LocalReviewRouter
+    live: cio_advisory.adapters.local.review_router:LocalReviewRouter
+    onprem: cio_advisory.adapters.onprem.review_router:OnPremReviewRouter

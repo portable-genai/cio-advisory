@@ -1,0 +1,27 @@
+# terraform.tfvars.example : concrete sample values for a Singapore-resident deploy.
+#
+# Copy to terraform.tfvars and fill in your own ids. Do NOT commit terraform.tfvars.
+# Region/zone already default to Singapore; change them only together with allowed_regions.
+
+project_id = "acme-wealth-sg-prod"
+
+# Residency (P-03). The region is chosen at deploy time and validated against the
+# allowlist; these are the secure defaults, shown for clarity. To deploy elsewhere you
+# must set BOTH allowed_regions and region : that is the residency review point.
+allowed_regions = ["asia-southeast1"]
+region          = "asia-southeast1"
+zone            = "asia-southeast1-a"
+
+# ~7-year WORM retention for the audit log (P-08). Bucket lock is irreversible.
+retention_days = 2557
+
+# Org / Access Context Manager. access_policy_id is the numeric policy id.
+org_id           = "123456789012"
+billing_account  = "01ABCD-2345EF-67890A"
+access_policy_id = "987654321098"
+
+# Networking for the private data plane.
+vpc_network_name = "cio-advisory-vpc"
+
+# Sovereignty perimeter on by default.
+enable_vpc_sc = true

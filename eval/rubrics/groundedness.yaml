@@ -1,0 +1,37 @@
+# Groundedness rubric : A4 AI Quality & Model-Risk gate (P-08).
+#
+# "Groundedness" measures whether every talking point in the briefing is backed by a CIO
+# house view that was actually retrieved and cited : the assistant does not assert a view
+# that floats free of a source. For a private-bank artifact this is non-negotiable: the RM
+# (and a reviewer) must be able to trace each point back to a house view (domain.models.Citation).
+#
+# Production scorer: the Gen AI evaluation service on the Gemini Enterprise Agent Platform,
+# routed through cio_advisory.adapters.gcp.genai_eval:GenAiEvalAdapter.
+# Offline/CI scorer: the deterministic heuristic in eval/run_eval.py (every talking point
+# must carry at least one house-view citation), so the gate runs with no GCP credentials.
+
+metric: groundedness
+description: >
+  Fraction of the briefing's talking points that are backed by a cited CIO house view.
+  A talking point with no citation scores 0 for that point.
+threshold: 0.80          # report fails if score < 0.80
+direction: maximize
+applies_to:
+  - AdvisoryBriefing.talking_points
+  - TalkingPoint.citations
+
+criteria:
+  - id: point_coverage
+    description: Each talking point is attributable to a cited house view.
+    weight: 0.7
+  - id: citations_present
+    description: The talking point carries at least one HOUSE_VIEW Citation.
+    weight: 0.3
+
+scoring:
+  scale: [0.0, 1.0]
+  pass_if: "score >= threshold"
+
+notes: >
+  The offline heuristic is intentionally strict: it credits a talking point only when it
+  carries a citation, so passing the offline gate is a lower bound on the LLM-judge score.

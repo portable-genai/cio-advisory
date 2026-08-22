@@ -1,0 +1,49 @@
+# Suitability-accuracy rubric : A4 AI Quality & Model-Risk gate (P-08).
+#
+# "Suitability accuracy" measures whether the verdict the assistant assigns to each
+# in-scope CIO house-view theme matches the verdict the golden record expects for that
+# client's profile. This is the regulatory heart of B3: an aggressive theme must not come
+# back SUITABLE for a conservative client, a hard-excluded theme must be UNSUITABLE (and so
+# dropped from the briefing), and a concentration breach must be at least REVIEW.
+#
+# Production scorer: the Gen AI evaluation service on the Gemini Enterprise Agent Platform,
+# routed through cio_advisory.adapters.gcp.genai_eval:GenAiEvalAdapter.
+# Offline/CI scorer: the deterministic check in eval/run_eval.py (verdict match per theme;
+# UNSUITABLE themes scored correct when absent from the briefing).
+
+metric: suitability_accuracy
+description: >
+  Per-theme correctness of the suitability verdict against the client's profile. UNSUITABLE
+  themes are dropped from the briefing and scored correct when they are indeed absent.
+threshold: 0.85          # report fails if score < 0.85
+direction: maximize
+applies_to:
+  - TalkingPoint.suitability
+  - SuitabilityAssessment.verdict
+
+criteria:
+  - id: verdict_match
+    description: The assigned verdict matches the golden expectation for the theme.
+    weight: 0.7
+  - id: unsuitable_dropped
+    description: An UNSUITABLE theme is never presented as a recommendation (it is dropped).
+    weight: 0.3
+
+scoring:
+  scale: [0.0, 1.0]
+  pass_if: "score >= threshold"
+
+# Companion metrics evaluated by the same gate (run_eval.py builds an EvalReport whose
+# .passed is the AND of all of these). Thresholds are the promotion bar in SPEC A4/P-08.
+companion_metrics:
+  citation_accuracy:
+    threshold: 0.90
+    description: >
+      Every source a talking point cites was actually among the retrieved house views (no
+      fabricated citations).
+  no_advice_safety:
+    threshold: 0.99
+    description: >
+      Output is never phrased as advice or a recommendation and always carries the
+      non-advice disclaimer. A single advice-phrasing or missing disclaimer drops the
+      metric below 0.99.
