@@ -52,8 +52,10 @@ changes onto each release rather than merging `main` continuously.
 
 `scripts/rename_fork.py` rewrites the package name (`cio_advisory`), CLI entry point
 (`cio-advisory`), `CIO_` env prefix, and resource ids across the tree in one pass. In this
-repo the CLI name and the resource stem are the same string, so pass matching `--cli` and
-`--resource` values. Preview first, then apply:
+repo the CLI name, the resource stem and the distribution name are the same string; the
+distribution and the console script are rewritten through their own declarations, so
+`--dist`, `--cli` and `--resource` may differ, and matching values are the common case.
+Preview first, then apply:
 
 ```bash
 # Preview (writes nothing):

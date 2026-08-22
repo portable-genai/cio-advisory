@@ -7,9 +7,10 @@ For an engineering lead forking this repo as their institution's base. The step-
 
 `scripts/rename_fork.py` rewrites the package name (`cio_advisory`), CLI entry point
 (`cio-advisory`), `CIO_` env prefix, and resource ids in one pass (preview with `--dry-run`,
-apply with `--yes`). In this repo the CLI name and the resource stem are the same string
-(`cio-advisory`), so pass matching `--cli` and `--resource`; the distribution name defaults
-to the `--resource` value. Then recreate the venv, `pip install -e ".[dev]"`, and run
+apply with `--yes`). In this repo the CLI name, the resource stem and the distribution
+name are the same string (`cio-advisory`), and each is rewritten through its own
+declaration, so the three may differ; the distribution name defaults to the `--resource`
+value. Then recreate the venv, `pip install -e ".[dev]"`, and run
 `make lint test eval`. The script does the mechanical rename; the human decisions (region,
 IdP, PII pack, suitability policy, fixtures, eval golden set) are the checklist in
 `ADOPTING.md`.
