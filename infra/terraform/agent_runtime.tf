@@ -61,6 +61,6 @@ resource "google_kms_crypto_key_iam_member" "agent_runtime" {
 #     from cio_advisory.agent.root_agent import build_root_agent; \
 #     from cio_advisory.config import Settings; \
 #     agent_engines.create(build_root_agent(Settings.load()), \
-#       requirements=['google-adk==2.3.0','cio-advisory'])"
+#       requirements=['google-adk==2.7.1','cio-advisory'])"
 #
 # (The display name "cio-advisory" matches settings.yaml agent_engine.display_name.)

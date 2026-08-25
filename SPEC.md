@@ -60,7 +60,7 @@ verdict and citations, for the RM to weigh and sign off.
 | Eval gate | Gen AI evaluation service |
 | Hosting | Agent Runtime (reasoningEngine) |
 
-SDKs: `google-adk==2.3.0`, `google-genai`, `google-cloud-aiplatform[agent_engines,adk,evaluation]`,
+SDKs: `google-adk==2.7.1`, `google-genai`, `google-cloud-aiplatform[agent_engines,adk,evaluation]`,
 `google-cloud-discoveryengine`, `google-cloud-bigquery`, `google-cloud-dlp`,
 `google-cloud-logging`, `opentelemetry-*`, `a2a-sdk`, `mcp`.
 

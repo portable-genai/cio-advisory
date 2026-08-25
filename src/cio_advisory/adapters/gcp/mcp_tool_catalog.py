@@ -1,6 +1,6 @@
 """MCP tool-catalog adapter (ToolCatalogPort).
 
-Exposes the governed, least-privilege tools B3 publishes over **MCP** (2025-11-25). The
+Exposes the governed, least-privilege tools B3 publishes over **MCP** (2026-07-28). The
 catalog is intentionally narrow: each tool maps to one domain capability (build a briefing,
 generate talking points, check suitability) with an explicit input schema, so a peer agent
 sees exactly what it is allowed to call.
@@ -15,6 +15,10 @@ from __future__ import annotations
 
 from ...config import Settings
 from ...domain.models import ToolSpec
+
+# MCP protocol revision this catalog conforms to. The stateless era: the initialize
+# handshake this catalog once assumed was removed in this revision.
+MCP_PROTOCOL_VERSION = "2026-07-28"
 
 _TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
