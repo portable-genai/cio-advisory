@@ -19,7 +19,7 @@ TF_DIR      := infra/terraform
 export CIO_PROFILE := $(PROFILE)
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-gcp fmt lint test briefing demo demo-server demo-selftest eval check \
+.PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
         demo-browser portability ui-install ui-check run-api run-ui tf-plan clean
 
 help: ## Show this help.
@@ -29,8 +29,15 @@ help: ## Show this help.
 install: ## Install the package + dev tooling (NO GCP SDK : local/test profile).
 	$(PIP) install -e ".[dev]"
 
+install-demo: ## Install the pinned headless-browser extra, then fetch its browser binary.
+	$(PIP) install -e ".[dev,demo]"
+	$(PYTHON) -m playwright install chromium
+
 install-gcp: ## Install with the managed-stack extra (google-adk, genai, discoveryengine, ...).
 	$(PIP) install -e ".[gcp,dev]"
+
+lock: ## Recompile every lockfile from pyproject.toml and restore the tag = commit headers.
+	$(PYTHON) scripts/lock.py
 
 fmt: ## Auto-format and auto-fix lint issues.
 	ruff format $(SRC) $(TESTS) eval
