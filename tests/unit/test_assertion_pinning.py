@@ -26,11 +26,12 @@ import json as _json
 
 import pytest
 from hex_service_kit import assertion as kit_assertion
+from hex_service_kit import federation as kit_federation
 from hex_service_kit.identity import IdentityError as KitIdentityError
 
 from cio_advisory.adapters.gcp.iap_identity import IapIdentityAdapter
 
-_IAP_ISSUER = "https://cloud.google.com/iap"
+_IAP_ISSUER = kit_federation.IAP_ISSUER
 _AUDIENCE = "/projects/1234567890/global/backendServices/42"
 
 
@@ -186,3 +187,17 @@ def test_the_algorithm_is_pinned_before_the_verifier_runs() -> None:
         f"the algorithm pin is called at line {pinned_at} and the verifier at line "
         f"{verified_at}. A pin after verification never protected the verifier."
     )
+
+
+def test_the_transport_facts_are_the_commons_values() -> None:
+    """The header, the issuer and the key set are REBOUND from the kit, not re-declared.
+
+    These three strings were copied into every repository that verifies an IAP assertion,
+    which is fifty-four chances for one of them to be edited alone. Asserting them against the
+    kit means a local re-declaration that drifts fails here rather than in a deployment.
+    """
+    from cio_advisory.adapters.gcp import iap_identity
+
+    assert iap_identity._ASSERTION_HEADER == kit_federation.IAP_ASSERTION_HEADER
+    assert iap_identity._IAP_ISSUER == kit_federation.IAP_ISSUER
+    assert iap_identity._IAP_KEYS_URL == kit_federation.IAP_KEYS_URL
