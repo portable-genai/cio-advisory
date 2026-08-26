@@ -58,7 +58,7 @@ class GenAiEvalAdapter:
             import vertexai
 
             self._client = vertexai.Client(
-                project=self._settings.project_id, location=self._settings.region
+                project=self._settings.project_id, location=self._settings.models.location
             )
         return self._client
 
