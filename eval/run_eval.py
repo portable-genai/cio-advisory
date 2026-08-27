@@ -412,7 +412,7 @@ class FakeLLMAdapter:
 
     def __init__(self, house_view_adapter: FakeHouseViewAdapter) -> None:
         self._hv = house_view_adapter
-        self.model = "gemini-3.7-flash"
+        self.model = "gemini-3.5-flash"
 
     def generate(self, request):
         from cio_advisory.domain.models import LlmResponse
