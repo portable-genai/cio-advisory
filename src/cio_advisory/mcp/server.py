@@ -22,9 +22,13 @@ from __future__ import annotations
 from typing import Any
 
 from hex_service_kit import mcpserve
-from hex_service_kit.identity import Principal
 
 from ..api import deps
+
+# The service is typed against the DOMAIN's principal, not the kit's. Both carry the
+# same fields, so constructing the kit's here type-checked as nothing and shipped a
+# value the service's own annotation rejects.
+from ..domain.identity import Principal
 
 #: The tools this module answers, as data, so a test can hold it against the catalog.
 HANDLER_NAMES: tuple[str, ...] = ("build_briefing", "generate_talking_points", "check_suitability")
