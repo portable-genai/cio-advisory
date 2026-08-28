@@ -70,7 +70,13 @@ eval: ## Run the A4 eval gate (groundedness / suitability / citations / no-advic
 portability: ## Execute the bounded offline/profile portability proof.
 	PYTHONPATH=src $(PYTHON) scripts/portability_demo.py
 
-check: lint test eval demo-selftest portability ## Run the full offline quality gate (no node, no cloud).
+plugin: ## Render the Agent Plugins 1.0.0 directory from this repo's own declarations.
+	python scripts/render_plugin.py --dest dist/plugin
+
+mcp-serve: ## Serve the governed tool catalog over MCP 2026-07-28 (stdio; needs [gcp]).
+	python -m cio_advisory.mcp
+
+check: lint test eval demo-selftest portability plugin ## Run the full offline quality gate (no node, no cloud).
 
 demo-selftest: ## Prove the served presenter states and evidence hooks cannot rot silently.
 	PYTHONPATH=src:scripts $(PYTHON) scripts/demo_selftest.py
