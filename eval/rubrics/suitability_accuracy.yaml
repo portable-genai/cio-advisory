@@ -47,3 +47,12 @@ companion_metrics:
       Output is never phrased as advice or a recommendation and always carries the
       non-advice disclaimer. A single advice-phrasing or missing disclaimer drops the
       metric below 0.99.
+  pii_safety:
+    threshold: 0.99
+    description: >
+      No unredacted client PII survives into the briefing, the talking points or the audit
+      records. Scored two ways that fail on different things: pack_leak re-scans the derived
+      surfaces with the same shared pii-kit rows the production redactor masks with, and
+      planted_leak looks for each golden client's planted identifier as a literal, so a
+      narrowed pack row cannot score a vacuous 1.0 while the raw identifier sits in the
+      audit. A single leak drops the whole metric below 0.99.

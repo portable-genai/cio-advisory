@@ -33,6 +33,9 @@ function directives(policy) {
   );
 }
 
+/** The environment a `next build` / `next start` deployment runs under. */
+const PROD = { NODE_ENV: "production" };
+
 test("the policy carries every directive the fleet standard requires", () => {
   const parsed = directives(contentSecurityPolicy({}, "abc123"));
   for (const name of [
@@ -63,10 +66,37 @@ test("no directive is ever emitted empty, in any framing state", () => {
 
 test("script-src takes the nonce and 'strict-dynamic' only when a nonce is supplied", () => {
   assert.equal(
-    directives(contentSecurityPolicy({}, "abc123")).get("script-src"),
+    directives(contentSecurityPolicy(PROD, "abc123")).get("script-src"),
     "'self' 'nonce-abc123' 'strict-dynamic'",
   );
-  assert.equal(directives(contentSecurityPolicy({})).get("script-src"), "'self'");
+  assert.equal(directives(contentSecurityPolicy(PROD)).get("script-src"), "'self'");
+});
+
+test("the dev server gets eval and a websocket, and a production build never does", () => {
+  // `npm run dev` compiles with `eval` and talks to Turbopack's HMR endpoint over a websocket.
+  // Without these two relaxations the dev-served console renders completely and never hydrates,
+  // which is exactly the failure `org-metadata/docs/demos/demo-inventory.md` records. The
+  // relaxations must therefore EXIST in development and must NEVER exist in a production build,
+  // so both halves are pinned here: dropping either branch turns one of these assertions red.
+  const dev = directives(contentSecurityPolicy({ NODE_ENV: "development" }, "abc123"));
+  assert.match(dev.get("script-src"), /'unsafe-eval'/);
+  assert.match(dev.get("connect-src"), /\bws: wss:/);
+
+  const prod = contentSecurityPolicy(PROD, "abc123");
+  assert.doesNotMatch(prod, /unsafe-eval/);
+  assert.doesNotMatch(prod, /ws:/);
+  assert.doesNotMatch(prod, /wss:/);
+});
+
+test("the production policy is byte-identical to the one that shipped before the dev branch", () => {
+  // The dev branch is only safe if it is invisible to a deployment. This pins the whole
+  // production string, so a relaxation leaking out of the `isDev` guard cannot pass review.
+  assert.equal(
+    contentSecurityPolicy(PROD, "abc123"),
+    "default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; " +
+      "script-src 'self' 'nonce-abc123' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'",
+  );
 });
 
 test("frame-ancestors is a three-state read matching the backend's", () => {
@@ -87,14 +117,17 @@ test("X-Frame-Options is sent only for the two states it can express", () => {
 
 test("connect-src widens to the API origin only, never the whole API URL", () => {
   const parsed = directives(
-    contentSecurityPolicy({ NEXT_PUBLIC_API_BASE: "https://api.example:8443/v1/briefings" }, "n"),
+    contentSecurityPolicy(
+      { ...PROD, NEXT_PUBLIC_API_BASE: "https://api.example:8443/v1/briefings" },
+      "n",
+    ),
   );
   assert.equal(parsed.get("connect-src"), "'self' https://api.example:8443");
 });
 
 test("a rooted relative API base remains covered by same-origin", () => {
   const parsed = directives(
-    contentSecurityPolicy({ NEXT_PUBLIC_API_BASE: "/apps/doc3/api" }, "n"),
+    contentSecurityPolicy({ ...PROD, NEXT_PUBLIC_API_BASE: "/apps/doc3/api" }, "n"),
   );
   assert.equal(parsed.get("connect-src"), "'self'");
 });

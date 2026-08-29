@@ -120,10 +120,23 @@ export function frameOptions(ancestors) {
  * @returns {string}
  */
 export function contentSecurityPolicy(env, nonce) {
-  const connectSrc = ["'self'", apiOrigin(env)].filter(Boolean).join(" ");
-  const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
-    : "script-src 'self'";
+  // Dev only: Turbopack's HMR client evaluates the module updates it receives and opens a
+  // websocket back to the dev server. Without both relaxations `npm run dev` serves a page that
+  // renders completely and never hydrates, which is the failure
+  // `org-metadata/docs/demos/demo-inventory.md` records. Neither is ever emitted by a production
+  // build: `next build` / `next start` set NODE_ENV=production, so the policy below comes out
+  // byte-identical to the one this console shipped before the branch existed.
+  const isDev = env.NODE_ENV !== "production";
+  const connectSrc = ["'self'", apiOrigin(env), isDev ? "ws: wss:" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const scriptSrc = [
+    "script-src 'self'",
+    nonce ? `'nonce-${nonce}' 'strict-dynamic'` : "",
+    isDev ? "'unsafe-eval'" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return [
     "default-src 'self'",
     "base-uri 'self'",
