@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "B3 CIO Advisory Assistant",
+  title: "CIO Advisory Assistant",
   description:
     "Grounded, suitability-checked decision-support talking points for private-bank relationship managers. Decision-support, not financial advice.",
 };
