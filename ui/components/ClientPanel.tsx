@@ -73,7 +73,7 @@ export function ClientPanel({
           <Pill tone={health.ok ? "good" : "bad"}>{health.ok ? "online" : "offline"}</Pill>
         </div>
         <p className="mt-1 text-xs text-ink-400">
-          B3 · decision-support, not advice
+          decision-support, not advice
           {health.region ? ` · ${health.region}` : ""}
           {health.profile ? ` · ${health.profile}` : ""}
         </p>
