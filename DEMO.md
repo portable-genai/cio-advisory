@@ -135,10 +135,16 @@ instead:
 
 ```bash
 make run-api PROFILE=local      # FastAPI on :8091
-make run-ui                     # Next.js console on http://localhost:3000
+cd ui && npm install && npm run build && npm run start
+# -> production console on http://localhost:3000
 ```
 
 The console submits the client to `POST /v1/briefing` and renders the same briefing.
+
+Present from the BUILT console, never the dev server. `next dev` compiles with `eval` and
+opens an HMR websocket, so it needs CSP relaxations a deployment must never carry; those
+are emitted only outside `NODE_ENV=production` (see [`ui/lib/csp.mjs`](ui/lib/csp.mjs)).
+`make run-ui` remains the developer loop, and it now hydrates, but a demo runs what ships.
 
 ### 2.3 Static artifacts (slides / screenshots)
 
@@ -232,7 +238,7 @@ curl -s localhost:8091/healthz
 Or the browser console (talks to the API on :8091) - see [`ui/README.md`](ui/README.md):
 
 ```bash
-make run-ui           # http://localhost:3000
+cd ui && npm install && npm run build && npm run start   # http://localhost:3000
 ```
 
 **What to highlight:** every talking point carries a **citation** back to a CIO house view;
