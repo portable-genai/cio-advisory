@@ -19,7 +19,7 @@ Contract notes (A4 is hardened and rejects the loose shapes a laxer gate would t
   silently PASSING. This repo's ``no_advice_safety`` safety metric is part of the bundle.
 * The evaluation response lists per-metric outcomes under ``results`` (not ``metrics``).
 
-The base URL is read from ``HRZ_QUALITY_URL`` with a localhost default.
+The base URL is read from ``QUALITY_GATE_URL`` with a localhost default.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class RemoteEvalGateAdapter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._model = settings.models.reasoning
-        self._base_url = setting_or_default("HRZ_QUALITY_URL", _DEFAULT_URL).rstrip("/")
+        self._base_url = setting_or_default("QUALITY_GATE_URL", _DEFAULT_URL).rstrip("/")
 
     def evaluate(self, dataset_path: str) -> EvalReport:
         """Run the A4 evaluation gate against ``dataset_path`` and map ``results`` back."""

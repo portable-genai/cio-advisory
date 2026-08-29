@@ -7,7 +7,7 @@ calling DLP directly. This adapter implements :class:`PIIRedactionPort` by POSTi
 gateway's ``/v1/redact`` endpoint and mapping the response into a domain
 :class:`RedactionResult` (SPEC §6, A1 contract).
 
-The base URL is read from ``HRZ_GUARDRAIL_URL`` with a localhost default.
+The base URL is read from ``GUARDRAIL_GATEWAY_URL`` with a localhost default.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class RemoteRedactionAdapter:
     def __init__(self, settings: object) -> None:
         self._settings = settings
         self._base_url = _s2s.validate_base_url(
-            setting_or_default("HRZ_GUARDRAIL_URL", _DEFAULT_URL), service="redaction gateway"
+            setting_or_default("GUARDRAIL_GATEWAY_URL", _DEFAULT_URL), service="redaction gateway"
         )
 
     def redact(self, text: str) -> RedactionResult:

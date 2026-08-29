@@ -64,9 +64,9 @@ BENIGN_TEXT = "Summarise the current CIO house views for a balanced, income-orie
 
 # The platform clients' localhost defaults (SPEC contract): mocked, never actually served.
 # These MUST match the env-var defaults hard-coded in the remote_* adapters.
-HRZ_GUARDRAIL = "http://localhost:8080"  # remote_guardrail / remote_redaction (HRZ_GUARDRAIL_URL)
-HRZ_KB = "http://localhost:8082"  # remote_house_views (HRZ_KB_URL)
-HRZ_OBSERVABILITY = "http://localhost:8085"  # remote_audit (HRZ_OBSERVABILITY_URL)
+GUARDRAIL_GATEWAY = "http://localhost:8080"  # remote_guardrail / remote_redaction (GUARDRAIL_GATEWAY_URL)
+KNOWLEDGE_BASE = "http://localhost:8082"  # remote_house_views (KNOWLEDGE_BASE_URL)
+OBSERVABILITY = "http://localhost:8085"  # remote_audit (OBSERVABILITY_URL)
 
 
 def _settings(profile: str) -> Settings:
@@ -129,7 +129,7 @@ def test_redaction_parity_same_request_every_implementation():
     with respx.mock:
         # The A1 gateway is DLP-backed; serve its documented /v1/redact answer for the same
         # request (DLP-style info-type masks), matching what the local regex adapter did.
-        respx.post(f"{HRZ_GUARDRAIL}/v1/redact").respond(
+        respx.post(f"{GUARDRAIL_GATEWAY}/v1/redact").respond(
             200,
             json={
                 "text": (
@@ -166,7 +166,7 @@ def test_guardrail_parity_same_verdict_every_implementation(text: str, should_al
     }
 
     with respx.mock:
-        respx.post(f"{HRZ_GUARDRAIL}/v1/guardrail/screen").respond(
+        respx.post(f"{GUARDRAIL_GATEWAY}/v1/guardrail/screen").respond(
             200,
             json={
                 "allowed": should_allow,
@@ -225,7 +225,7 @@ def test_audit_parity_identical_payload_at_every_sink():
 
     # platform sink (A5 observability): the POSTed body is byte-identical to what local stored.
     with respx.mock:
-        route = respx.post(f"{HRZ_OBSERVABILITY}/v1/audit").respond(202)
+        route = respx.post(f"{OBSERVABILITY}/v1/audit").respond(202)
         _adapter("audit", "platform").record(event)
         posted = json.loads(route.calls.last.request.content)
     assert posted == expected, "platform sink received a different record than local stored"
@@ -246,7 +246,7 @@ def test_house_view_parity_same_views_across_implementations():
 
     with respx.mock:
         # A2 serves the same passages for the same query (SPEC /v1/search shape).
-        respx.post(f"{HRZ_KB}/v1/search").respond(
+        respx.post(f"{KNOWLEDGE_BASE}/v1/search").respond(
             200, json={"passages": [_house_view_passage(v) for v in local_views]}
         )
         remote_views = _adapter("house_view", "platform").retrieve(query, top_k=3)

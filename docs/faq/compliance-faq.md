@@ -26,7 +26,7 @@ the assistant is never ungrounded.
 To the sibling **Hrz7 Human-Review & Maker-Checker Console** (mandatory rule R8). Every
 escalated briefing is submitted via the shared `review-kit` client, redact-before-wire:
 the `local` profile enqueues to a transactional outbox so the routing path runs offline, and
-`gcp`/`platform` submit over S2S to Hrz7's intake (`HRZ_HUMAN_REVIEW_URL`). See
+`gcp`/`platform` submit over S2S to Hrz7's intake (`HUMAN_REVIEW_URL`). See
 `ports/review_router.py` and `adapters/{local,platform,onprem}/review_router.py`. The
 maker-checker escalation is a routed action, not a boolean left on the record.
 

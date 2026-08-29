@@ -34,7 +34,7 @@ Principles marked **n/a** genuinely do not apply to Doc3 and say why.
 | **R4** register in Hrz3 | Met | `adapters/platform/remote_registry.py` registers the AgentCard with Hrz3; the card advertises the three Doc3 skills. |
 | **R5** pass Hrz4 before promotion | Met | `EvaluationGatePort` -> Hrz4 (`adapters/platform/remote_eval_gate.py`) plus the in-repo offline gate (`eval/run_eval.py`) as the merge guard. |
 | **R6** validated by Rsk3 at intake | Met (external) | Doc3 is registered for Rsk3 architecture-validation at intake; the dotted-path build contract in `config/settings.yaml` is what Rsk3 reads. |
-| **R8** route `requires_human_review` to Hrz7 | Met | Every escalated briefing is submitted to the Hrz7 Human-Review & Maker-Checker Console via the shared `review-kit` client (redact-before-wire); `local` enqueues to a transactional outbox so the routing path runs offline, `gcp`/`platform` submit over S2S to Hrz7's service intake (`HRZ_HUMAN_REVIEW_URL`). `ports/review_router.py`, `adapters/{local,platform,onprem}/review_router.py`, `adapters/_review_payload.py`. |
+| **R8** route `requires_human_review` to Hrz7 | Met | Every escalated briefing is submitted to the Hrz7 Human-Review & Maker-Checker Console via the shared `review-kit` client (redact-before-wire); `local` enqueues to a transactional outbox so the routing path runs offline, `gcp`/`platform` submit over S2S to Hrz7's service intake (`HUMAN_REVIEW_URL`). `ports/review_router.py`, `adapters/{local,platform,onprem}/review_router.py`, `adapters/_review_payload.py`. |
 
 ## The advice / decision-support boundary (Doc3-specific)
 

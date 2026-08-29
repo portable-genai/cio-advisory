@@ -7,7 +7,7 @@ POSTing to A2's ``/v1/search`` endpoint and mapping each returned passage into a
 :class:`HouseView` (with a HOUSE_VIEW citation). Stance and asset class are parsed from the
 passage metadata where present, defaulting conservatively when absent.
 
-The base URL is read from ``HRZ_KB_URL`` (localhost default), so nothing GCP-specific is
+The base URL is read from ``KNOWLEDGE_BASE_URL`` (localhost default), so nothing GCP-specific is
 required to construct or exercise it.
 """
 
@@ -37,7 +37,7 @@ class RemoteHouseViewAdapter:
     def __init__(self, settings: object) -> None:
         self._settings = settings
         self._base_url = _s2s.validate_base_url(
-            setting_or_default("HRZ_KB_URL", _DEFAULT_URL), service="knowledge base"
+            setting_or_default("KNOWLEDGE_BASE_URL", _DEFAULT_URL), service="knowledge base"
         )
 
     def retrieve(
