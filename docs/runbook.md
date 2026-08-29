@@ -45,7 +45,7 @@ review), never a 500. A missing portfolio or empty house-view result returns a 2
 | Symptom | Likely cause | Action |
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
-| `RetrievalEmptyError` | The Hrz2 governed KB returned no house views | Check `HRZ_KB_URL` and that the CIO corpus is indexed in Hrz2. |
+| `RetrievalEmptyError` | The Hrz2 governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed in Hrz2. |
 | `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the portfolio/profile tables are populated. |
 | Briefing has fewer points than house views | UNSUITABLE points were dropped | Expected: unsuitable themes are never presented. Review the audit metadata `n_review_or_unsuitable`. |
 | Eval gate fails on `no_advice_safety` | Output read as advice or missing disclaimer | A prompt or post-processing change leaked directive phrasing. Revert and re-run `python eval/run_eval.py`. |

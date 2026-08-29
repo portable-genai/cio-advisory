@@ -30,7 +30,7 @@ _BUNDLE = "doc3-cio-advisory"
 
 def _adapter(monkeypatch: pytest.MonkeyPatch) -> RemoteEvalGateAdapter:
     # The base URL is read in __init__, so set it before constructing the adapter.
-    monkeypatch.setenv("HRZ_QUALITY_URL", _BASE)
+    monkeypatch.setenv("QUALITY_GATE_URL", _BASE)
     return RemoteEvalGateAdapter(Settings())
 
 

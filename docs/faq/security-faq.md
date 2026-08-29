@@ -28,8 +28,8 @@ an ungrounded answer for a client they cannot see.
 ### What about the service-to-service calls in the `platform` profile?
 
 The platform adapters (`adapters/platform/_s2s.py`) require `https://` base URLs outside
-loopback (rejected at adapter construction). When `HRZ_S2S_TOKEN` is set, every request
-carries it as an `Authorization: Bearer` header, and `HRZ_S2S_SIGNING_KEY` optionally
+loopback (rejected at adapter construction). When `S2S_TOKEN` is set, every request
+carries it as an `Authorization: Bearer` header, and `S2S_SIGNING_KEY` optionally
 propagates the verified end-user actor as a signed header rather than a trust-me JSON field.
 The receiving horizontal-platform and de-risking services own verification. The outbound
 S2S machinery and the fail-closed network defaults come from the shared `hex-service-kit`
@@ -112,7 +112,7 @@ coupling to un-pinned code.
 ### Where are secrets? Are any committed?
 
 No secret values are in the repo. `config/settings.yaml` stores only the **names** of env
-vars holding secrets (`HRZ_S2S_TOKEN`, `HRZ_S2S_SIGNING_KEY`, and similar); values are read
+vars holding secrets (`S2S_TOKEN`, `S2S_SIGNING_KEY`, and similar); values are read
 at construction time and never logged. Every shipped client, portfolio and house-view
 fixture uses obviously-fictional ids.
 

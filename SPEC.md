@@ -144,17 +144,17 @@ IAP-injected assertion. See docs/embedding-and-identity.md.
 
 ### Sibling services Doc3 CONSUMES
 
-- **Hrz1 guardrail** (`HRZ_GUARDRAIL_URL`, default `:8080`): `POST /v1/guardrail/screen`,
+- **Hrz1 guardrail** (`GUARDRAIL_GATEWAY_URL`, default `:8080`): `POST /v1/guardrail/screen`,
   `POST /v1/redact`.
-- **Hrz2 enterprise KB** (`HRZ_KB_URL`, default `:8082`): `POST /v1/search` (house-view RAG).
-- **Hrz3 registry** (`HRZ_REGISTRY_URL`, default `:8083`): `POST /v1/agents`, `GET /v1/agents/{name}`.
-- **Hrz4 AI quality** (`HRZ_QUALITY_URL`, default `:8084`, R5 gate): `POST /v1/evaluations`
+- **Hrz2 enterprise KB** (`KNOWLEDGE_BASE_URL`, default `:8082`): `POST /v1/search` (house-view RAG).
+- **Hrz3 registry** (`AGENT_REGISTRY_URL`, default `:8083`): `POST /v1/agents`, `GET /v1/agents/{name}`.
+- **Hrz4 AI quality** (`QUALITY_GATE_URL`, default `:8084`, R5 gate): `POST /v1/evaluations`
   with a structured body `{target: {model, prompt_version, dataset_id, system}, dataset_id,
   bundle: "doc3-cio-advisory"}` (the top-level `dataset_id` must equal `target.dataset_id`);
   per-metric outcomes are read from `results[]` (not `metrics[]`). `POST /v1/gate` (same body)
   returns the single `{passed}` promotion decision. Hrz4 selects the metric suite from the
   registered `doc3-cio-advisory` bundle, so the client sends no bare metric names.
-- **Hrz5 observability** (`HRZ_OBSERVABILITY_URL`, default `:8085`): `POST /v1/audit`.
+- **Hrz5 observability** (`OBSERVABILITY_URL`, default `:8085`): `POST /v1/audit`.
 
 Validated by **Rsk3** at intake (R6).
 
