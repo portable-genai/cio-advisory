@@ -64,7 +64,7 @@ BENIGN_TEXT = "Summarise the current CIO house views for a balanced, income-orie
 
 # The platform clients' localhost defaults (SPEC contract): mocked, never actually served.
 # These MUST match the env-var defaults hard-coded in the remote_* adapters.
-GUARDRAIL_GATEWAY = "http://localhost:8080"  # remote_guardrail / remote_redaction (GUARDRAIL_GATEWAY_URL)
+GUARDRAIL_GATEWAY = "http://localhost:8080"  # remote_guardrail / remote_redaction
 KNOWLEDGE_BASE = "http://localhost:8082"  # remote_house_views (KNOWLEDGE_BASE_URL)
 OBSERVABILITY = "http://localhost:8085"  # remote_audit (OBSERVABILITY_URL)
 
