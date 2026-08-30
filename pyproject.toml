@@ -54,6 +54,14 @@ gcp = [
   "google-cloud-discoveryengine>=0.13",
   "google-cloud-bigquery>=3.25",
   "google-cloud-dlp>=3.20",
+  # Bound as the `gcp`/`platform` guardrail in config/settings.yaml and imported lazily by
+  # adapters/gcp/model_armor_guardrail.py, so the module imported clean and failed only when
+  # USED: `_get_client()` raised ImportError. Declared nowhere until 2026-08-30, when the new
+  # non-blocking lint-gcp job -- mypy against the runtime lock rather than the dev lock --
+  # reported it on its first run. The identical adapter in credit-memo-drafting was fixed by
+  # hand in the same class of sweep and this one was missed, which is the argument for the
+  # job in one line.
+  "google-cloud-modelarmor>=0.2",
   "google-cloud-logging>=3.11",
   "opentelemetry-sdk>=1.27",
   "opentelemetry-exporter-gcp-trace>=1.7",
