@@ -87,16 +87,14 @@ local:
   db_path: ${CIO_LOCAL_DB:-}         # SQLite FTS5 house-view index
   audit_path: ${CIO_LOCAL_AUDIT:-}   # append-only local audit store
 
-# The `live` profile: real grounded market research + a local model server on this
-# machine (MLX / Ollama / vLLM, any OpenAI-compatible /chat/completions endpoint).
-# House-view themes come from Gemini google_search research over real published market
-# commentary (needs GOOGLE_CLOUD_PROJECT + ADC and the [gcp] extra), cited to their
-# public sources; clients/portfolios are audience-registered (POST /v1/clients); the
-# fictional samples never appear.
+# The `live` profile: real grounded market research, every model call the Gemini API.
+# There is deliberately NO local model server: house-view themes already come from
+# Gemini google_search research over real published market commentary, so this system
+# cannot run without leaving the data centre, and a local-model profile beside it would
+# demo a deployment nobody would buy (org decision, 2026-08-30). The profile needs
+# GOOGLE_CLOUD_PROJECT + ADC and the [gcp] extra. Clients/portfolios are
+# audience-registered (POST /v1/clients); the fictional samples never appear.
 live:
-  llm_url: ${CIO_LIVE_LLM_URL:-http://127.0.0.1:8001/chat/completions}
-  llm_model: ${CIO_LIVE_LLM_MODEL:-mlx-community/gemma-4-26b-a4b-it-8bit}
-  timeout_seconds: ${CIO_LIVE_TIMEOUT:-240}
   max_output_tokens: ${CIO_LIVE_MAX_TOKENS:-2048}
   research_cache_path: ${CIO_LIVE_RESEARCH_CACHE:-}   # "" => ~/.cio_advisory/live-house-views.json
   research_cache_ttl_seconds: ${CIO_LIVE_RESEARCH_TTL:-21600}  # 0 disables the cache
@@ -133,7 +131,7 @@ adapters:
     gcp: cio_advisory.adapters.gcp.gemini_llm:GeminiLLMAdapter
     platform: cio_advisory.adapters.gcp.gemini_llm:GeminiLLMAdapter
     local: cio_advisory.adapters.local.llm:LocalDeterministicLLMAdapter
-    live: cio_advisory.adapters.live.llm:GemmaLocalLLMAdapter
+    live: cio_advisory.adapters.gcp.gemini_llm:GeminiLLMAdapter
     onprem: cio_advisory.adapters.onprem.llm:OnPremLLMAdapter
   grounding:
     gcp: cio_advisory.adapters.gcp.gemini_grounding:GeminiGoogleSearchGroundingAdapter
