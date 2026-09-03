@@ -40,7 +40,7 @@ verdict and citations, for the RM to weigh and sign off.
   google client is imported lazily, only on that branch). There is no emulator for File
   Search, Gemini, Model Armor, DLP or BigQuery, so those stay on the SDK-free workaround.
 - **Models** (pinned): reasoning `gemini-3.5-flash` (thinking=high) for talking-point
-  synthesis; triage `gemini-3.1-flash-lite`. Never a floating default or `gemini-2.0-flash`.
+  synthesis; triage `gemini-3.5-flash`. Never a floating default or `gemini-2.0-flash`.
 - **Grounding** (`grounding_enabled`, default off): public-web `google_search` corroboration
   via an isolated sub-agent (one built-in tool per agent).
 - **Suitability** (`suitability.concentration_limit`, default 0.40): the single-asset-class
