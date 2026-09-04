@@ -1,4 +1,4 @@
-# Contributing to Doc3
+# Contributing to `cio-advisory`
 
 Thanks for helping improve the CIO Advisory Assistant. This is an engineering-portfolio
 reference repo: it must stay internally consistent and pass an offline gate with **no Google

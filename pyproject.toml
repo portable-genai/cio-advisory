@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "cio-advisory"
 version = "0.0.1"
-description = "B3 CIO Advisory Assistant — grounded, suitability-checked, decision-support talking points for private-bank relationship managers, built ports-and-adapters on the Gemini Enterprise Agent Platform. Decision-support, not financial advice."
+description = "CIO Advisory Assistant — grounded, suitability-checked, decision-support talking points for private-bank relationship managers, built ports-and-adapters on the Gemini Enterprise Agent Platform. Decision-support, not financial advice."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -34,7 +34,7 @@ dependencies = [
   # a pack fix is a version bump instead of a copy that drifts (retires the C4 regex copy).
   "pii-kit @ git+https://github.com/portable-genai/pii-kit@v0.0.1",
   # review-kit: the producer half of rule R8 (route a requires_human_review escalation to the
-  # Hrz7 Human-Review & Maker-Checker Console). Pure stdlib client + transactional outbox, public,
+  # human-review-console Human-Review & Maker-Checker Console). Pure stdlib client + transactional outbox, public,
   # pinned by tag; the domain stays pure while the adapter does the S2S submission.
   "review-kit @ git+https://github.com/portable-genai/review-kit@v0.0.1",
 ]

@@ -1,6 +1,6 @@
-# Doc3 CIO Advisory Assistant : UI
+# `cio-advisory` CIO Advisory Assistant : UI
 
-A small React / Next.js console for the Doc3 backend. It lets a relationship manager pick a
+A small React / Next.js console for the `cio-advisory` backend. It lets a relationship manager pick a
 client, build a suitability-checked advisory briefing, and read the personalised talking
 points (each tagged with a suitability verdict and citations) and the portfolio alignment.
 
@@ -36,7 +36,7 @@ components/
   ui            shared primitives (Panel, Pill, banners)
 lib/
   types.ts       TypeScript mirrors of the domain dataclasses
-  api.ts         typed fetch client for the Doc3 endpoints
+  api.ts         typed fetch client for the `cio-advisory` endpoints
   csp.mjs        the ONE place the Content-Security-Policy is built
 proxy.ts         the ONE place it is emitted (per-request script nonce)
 scripts/

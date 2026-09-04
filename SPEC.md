@@ -1,6 +1,6 @@
-# Doc3 CIO Advisory Assistant : System Specification
+# `cio-advisory` CIO Advisory Assistant : System Specification
 
-> Catalog id **Doc3** · group `doc` · priority **P1** · buyer **Wealth / Private Bank** ·
+> Catalog id `cio-advisory` · group `doc` · priority **P1** · buyer **Wealth / Private Bank** ·
 > service port **8091** · package `cio_advisory`.
 >
 > **Decision-support, NOT financial advice.** Every output is suitability-tagged, carries a
@@ -9,10 +9,10 @@
 
 ## 1. Purpose
 
-Doc3 is a grounded assistant for relationship managers in private banking. It does RAG over
-the bank's **CIO house-view articles** (via the governed Hrz2 knowledge base) and reads the
+`cio-advisory` is a grounded assistant for relationship managers in private banking. It does RAG over
+the bank's **CIO house-view articles** (via the governed `enterprise-knowledge-base` knowledge base) and reads the
 **client's portfolio**, then produces **personalised, suitability-checked talking points**.
-It handles customer PII / financial data, so rule **R1** applies: the full Hrz1 redaction +
+It handles customer PII / financial data, so rule **R1** applies: the full `agent-guardrail-gateway` redaction +
 guardrail pipeline runs on every request.
 
 The assistant never advises. It surfaces discussion points, each tagged with a suitability
@@ -24,14 +24,14 @@ verdict and citations, for the RM to weigh and sign off.
   fallback.
 - **Profiles** (env `CIO_PROFILE`, production default `gcp`): `gcp` (managed stack),
   `local` (a WORKING offline laptop stack, what dev/test/CI set explicitly), `platform` (delegate to
-  sibling Hrz1/Hrz2/Hrz3/Hrz4/Hrz5 services over HTTP), `onprem` (fail-fast placeholder adapters, the
+  sibling `agent-guardrail-gateway`, `enterprise-knowledge-base`, `agent-registry`, `model-quality-gate`, `agent-observability` services over HTTP), `onprem` (fail-fast placeholder adapters, the
   migration target).
 
 | Profile | Backend per port | Notes |
 |---|---|---|
 | `gcp` | Managed Gemini Enterprise Agent Platform (lazy SDK) | Production default |
 | `local` | House views: SQLite FTS5 (BM25). LLM: deterministic schema-driven. Guardrail: heuristic. DLP: regex. Audit: append-only SQLite WORM stand-in. Tracer: no-op. Sessions / memory / registry: in-process. Portfolio: in-process synthetic. Grounding: disabled. Eval: in-repo offline gate. | SDK-free, no API key, no emulator. Self-seeds a synthetic corpus. |
-| `platform` | HTTP clients to Hrz1 / Hrz2 / Hrz3 / Hrz4 / Hrz5 | Inside the full platform |
+| `platform` | HTTP clients to `agent-guardrail-gateway` / `enterprise-knowledge-base` / `agent-registry` / `model-quality-gate` / `agent-observability` | Inside the full platform |
 | `onprem` | Placeholders that raise `NotImplementedError` | Fail-fast migration target |
 
   The `local` profile is SDK-free and emulator-free by default; for higher fidelity it
@@ -50,7 +50,7 @@ verdict and citations, for the RM to weigh and sign off.
 
 | Concern | Managed service |
 |---|---|
-| House-view retrieval | Governed Hrz2 KB (`/v1/search`); standalone: Agent Search / File Search |
+| House-view retrieval | Governed `enterprise-knowledge-base` (`/v1/search`); standalone: Agent Search / File Search |
 | Portfolio + profile | BigQuery (internal data, CMEK, in-region) |
 | Reasoning / triage | Gemini on the Gemini Enterprise Agent Platform |
 | Guardrail | Model Armor (`sanitizeUserPrompt` / `sanitizeModelResponse`) |
@@ -113,7 +113,7 @@ GCP SDK.
 redaction.redact(inputs)
   -> guardrail.screen(INPUT)            [blocked -> audit BLOCKED + raise]
   -> portfolio.get_profile + get_portfolio
-  -> house_view.retrieve (Hrz2)           [empty -> RetrievalEmptyError]
+  -> house_view.retrieve (`enterprise-knowledge-base`)           [empty -> RetrievalEmptyError]
   -> llm synthesise TalkingPoint[]
   -> SuitabilityPolicy.assess per point (drop/flag UNSUITABLE)
   -> compute PortfolioAlignment
@@ -142,21 +142,21 @@ No request body carries an `actor`: identity is resolved server-side by the Iden
 seeded persona is chosen with the `X-Dev-Persona` header; in secure mode it comes from the
 IAP-injected assertion. See docs/embedding-and-identity.md.
 
-### Sibling services Doc3 CONSUMES
+### Sibling services `cio-advisory` CONSUMES
 
-- **Hrz1 guardrail** (`GUARDRAIL_GATEWAY_URL`, default `:8080`): `POST /v1/guardrail/screen`,
+- **`agent-guardrail-gateway`** (`GUARDRAIL_GATEWAY_URL`, default `:8080`): `POST /v1/guardrail/screen`,
   `POST /v1/redact`.
-- **Hrz2 enterprise KB** (`KNOWLEDGE_BASE_URL`, default `:8082`): `POST /v1/search` (house-view RAG).
-- **Hrz3 registry** (`AGENT_REGISTRY_URL`, default `:8083`): `POST /v1/agents`, `GET /v1/agents/{name}`.
-- **Hrz4 AI quality** (`QUALITY_GATE_URL`, default `:8084`, R5 gate): `POST /v1/evaluations`
+- **`enterprise-knowledge-base`** (`KNOWLEDGE_BASE_URL`, default `:8082`): `POST /v1/search` (house-view RAG).
+- **`agent-registry`** (`AGENT_REGISTRY_URL`, default `:8083`): `POST /v1/agents`, `GET /v1/agents/{name}`.
+- **`model-quality-gate` AI quality** (`QUALITY_GATE_URL`, default `:8084`, R5 gate): `POST /v1/evaluations`
   with a structured body `{target: {model, prompt_version, dataset_id, system}, dataset_id,
   bundle: "doc3-cio-advisory"}` (the top-level `dataset_id` must equal `target.dataset_id`);
   per-metric outcomes are read from `results[]` (not `metrics[]`). `POST /v1/gate` (same body)
-  returns the single `{passed}` promotion decision. Hrz4 selects the metric suite from the
+  returns the single `{passed}` promotion decision. `model-quality-gate` selects the metric suite from the
   registered `doc3-cio-advisory` bundle, so the client sends no bare metric names.
-- **Hrz5 observability** (`OBSERVABILITY_URL`, default `:8085`): `POST /v1/audit`.
+- **`agent-observability`** (`OBSERVABILITY_URL`, default `:8085`): `POST /v1/audit`.
 
-Validated by **Rsk3** at intake (R6).
+Validated by `architecture-validator` at intake (R6).
 
 ## 7. Eval gate (`eval/run_eval.py`)
 
@@ -172,7 +172,7 @@ expected_suitability_verdicts}`, driving the real `AdvisoryService`. Metrics and
 
 ## 8. Non-goals
 
-Doc3 does not execute trades, place orders, or move money. It does not provide financial
+`cio-advisory` does not execute trades, place orders, or move money. It does not provide financial
 advice, a recommendation, or a suitability sign-off for the client: those remain with the
 RM. The synthetic client/portfolio data is fictional and not for live client data without
 sign-off.

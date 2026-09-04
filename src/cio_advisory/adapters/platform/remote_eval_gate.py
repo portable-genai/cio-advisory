@@ -136,7 +136,7 @@ class RemoteEvalGateAdapter:
 
     def _post(self, path: str, payload: dict[str, object]) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
-        # TODO(plan-hrz-s2s-auth): attach S2S header once Hrz4 verifies it
+        # TODO(plan-hrz-s2s-auth): attach S2S header once model-quality-gate verifies it
         try:
             response = httpx.post(url, json=payload, timeout=_TIMEOUT)
         except httpx.HTTPError as exc:

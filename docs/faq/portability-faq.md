@@ -49,7 +49,7 @@ work) that nonetheless satisfy every Protocol and construct with a single `Setti
 the *interface contract* for a sovereign migration is proven and enforced by CI today. The
 actual on-prem implementations are the migration work, scoped in
 [`docs/onprem-migration.md`](../onprem-migration.md). This repo is not the sovereign-exit
-*planner* (that is the sibling **Rgc9** `operational-resilience-mapping`, module
+*planner* (that is the sibling `operational-resilience-mapping`, module
 `domain/concentration_exit/`: APRA CPS 230, MAS / HKMA outsourcing); this repo is one of the
 systems whose exit that planner reasons about.
 
@@ -59,7 +59,7 @@ No. Residency is a deploy-time pin (the region, an Org Policy resource-location 
 CMEK, VPC-SC); portability is the ability to change *where* the stack runs by configuration.
 They are orthogonal. The region defaults to `asia-southeast1` (Singapore) and is validated to
 fail fast, and a second region or enterprise is a tfvars change, not a fork. Residency
-enforcement overlaps with the sibling **Rsk3** `architecture-validator` (`domain/residency/`,
+enforcement overlaps with the sibling `architecture-validator` (`domain/residency/`,
 a CI gate for region violations), which a fork should run rather than re-implement.
 
 ### Does the assistant lock me into Google's agent stack?

@@ -5,7 +5,7 @@ vs LLM, and, importantly, where its responsibilities **stop** and a sibling cata
 takes over. Cross-references: [`README.md`](../../README.md), [`DEMO.md`](../../DEMO.md),
 [`SPEC.md`](../../SPEC.md).
 
-### What does Doc3 actually produce?
+### What does `cio-advisory` actually produce?
 
 An `AdvisoryBriefing` for one client: personalised `TalkingPoint`s that each link a CIO
 house-view theme to the client's holdings, a portfolio-alignment summary, and a mandatory
@@ -34,7 +34,7 @@ alignment without the model. This is by design (the "deterministic domain servic
 
 No. Every `AdvisoryBriefing` sets `requires_human_review = True` (maker-checker, P-06); the
 assistant proposes and the RM disposes. REVIEW / UNSUITABLE signals *raise* the review bar and
-route the escalation to the Hrz7 Human-Review & Maker-Checker Console (rule R8); they never
+route the escalation to the `human-review-console` Human-Review & Maker-Checker Console (rule R8); they never
 lower it and never auto-execute.
 
 ### Which capabilities does this repo own vs integrate from the catalog?
@@ -44,25 +44,25 @@ suitability domain logic and its outputs. It **integrates** (via the `platform` 
 adapters) several cross-cutting concerns owned by sibling platform systems; do not rebuild
 these in a fork:
 
-| Concern | Owned by (catalog id / repo) | Doc3's role |
+| Concern | Owned by (catalog id / repo) | `cio-advisory`'s role |
 |---|---|---|
-| Runtime guardrail: PII redaction, prompt-injection / jailbreak defense | **Hrz1** `agent-guardrail-gateway` | consumes it on every briefing (input + output screen) |
-| Governed RAG / ACL-aware knowledge base that serves the CIO house views | **Hrz2** `enterprise-knowledge-base` | retrieves grounded, cited house views from it (R3); builds no separate retrieval backend |
-| Agent registry, versioning, identity, entitlements | **Hrz3** `agent-registry` | publishes its A2A AgentCard for discovery (R4) |
-| AI-quality / eval / model-risk promotion gate | **Hrz4** `model-quality-gate` | its eval metrics gate promotion (R5); the offline gate mirrors it |
-| Observability + immutable WORM prompt/response audit | **Hrz5** `agent-observability` | writes audit events to it (R2); traces spans through it |
-| Human-Review & Maker-Checker Console | **Hrz7** human-review console | escalated briefings route to it via `review-kit` (R8) |
-| Regulatory Q&A / suitability control checklists | **Rsk1** `compliance-advisory` | consumes it for regulatory compliance checks |
+| Runtime guardrail: PII redaction, prompt-injection / jailbreak defense | `agent-guardrail-gateway` | consumes it on every briefing (input + output screen) |
+| Governed RAG / ACL-aware knowledge base that serves the CIO house views | `enterprise-knowledge-base` | retrieves grounded, cited house views from it (R3); builds no separate retrieval backend |
+| Agent registry, versioning, identity, entitlements | `agent-registry` | publishes its A2A AgentCard for discovery (R4) |
+| AI-quality / eval / model-risk promotion gate | `model-quality-gate` | its eval metrics gate promotion (R5); the offline gate mirrors it |
+| Observability + immutable WORM prompt/response audit | `agent-observability` | writes audit events to it (R2); traces spans through it |
+| Human-Review & Maker-Checker Console | `human-review-console` | escalated briefings route to it via `review-kit` (R8) |
+| Regulatory Q&A / suitability control checklists | `compliance-advisory` | consumes it for regulatory compliance checks |
 
 So the guardrail, knowledge base, audit sink, eval platform and review console are
-*dependencies*, not features of this repo. Doc3's own `SuitabilityPolicy` and alignment
+*dependencies*, not features of this repo. `cio-advisory`'s own `SuitabilityPolicy` and alignment
 services are the client-level decision logic, distinct from the platform's runtime controls.
 
 ### Where does the client and market data come from?
 
 The client's risk profile / KYC attributes and portfolio holdings come from an internal,
 CMEK-encrypted, in-region store (BigQuery on the `gcp` profile; a seeded SQLite store on
-`local`). The CIO house views come from the governed Hrz2 knowledge base. Doc3 joins the two
+`local`). The CIO house views come from the governed `enterprise-knowledge-base` knowledge base. `cio-advisory` joins the two
 and reasons over them; it is not the system of record for either.
 
 ### Can I use this for a non-advisory suitability product?

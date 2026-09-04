@@ -1,4 +1,4 @@
-# Demo scripts - Doc3 CIO Advisory Assistant
+# Demo scripts - `cio-advisory` CIO Advisory Assistant
 
 All scripts are SDK-free and run against the in-process `local` stack (no Google Cloud,
 no API key, no LLM call: a deterministic local LLM narrates and the suitability policy is

@@ -48,7 +48,7 @@ class LocalOfflineEvalAdapter:
         with no credentials and no network. ``gate`` does not, and returning ``True`` from it
         would be the worst defect this file could carry, because a promotion certified by a
         process running on a laptop with no quality service is certified by nothing. The
-        authority is Hrz4, reachable only from the platform / gcp profiles.
+        authority is model-quality-gate, reachable only from the platform / gcp profiles.
         """
         raise NotImplementedError(
             "the local profile has no promotion authority; promotion is the A4 "

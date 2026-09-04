@@ -199,10 +199,10 @@ adapters:
     local: cio_advisory.adapters.local.tool_catalog:LocalToolCatalogAdapter
     live: cio_advisory.adapters.local.tool_catalog:LocalToolCatalogAdapter
     onprem: cio_advisory.adapters.onprem.tool_catalog:OnPremToolCatalogAdapter
-  # Rule R8: an escalated advisory briefing (requires_human_review) is ROUTED to the Hrz7
+  # Rule R8: an escalated advisory briefing (requires_human_review) is ROUTED to the human-review-console
   # Human-Review & Maker-Checker Console via the shared review-kit, not left as a boolean.
   # local enqueues to an in-memory outbox so the routing path runs offline; gcp/platform submit
-  # over S2S to Hrz7's service intake; onprem is the fail-fast sovereign-migration placeholder.
+  # over S2S to human-review-console's service intake; onprem is the fail-fast sovereign-migration placeholder.
   review_router:
     gcp: cio_advisory.adapters.platform.review_router:PlatformReviewRouter
     platform: cio_advisory.adapters.platform.review_router:PlatformReviewRouter

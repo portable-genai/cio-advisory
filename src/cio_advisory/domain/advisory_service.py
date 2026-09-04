@@ -81,7 +81,8 @@ class AdvisoryService:
         self._audit = audit
         self._suitability = suitability_policy or SuitabilityPolicy()
         self._review = review_policy or CioReviewPolicy()
-        # Rule R8: when the briefing requires human review it is routed to Hrz7 (the maker-checker
+        # Rule R8: when the briefing requires human review it is routed to human-review-console (the
+        # maker-checker
         # console), not left as a boolean. Optional so unit tests and the CLI can omit it; when
         # unset the escalation still audits ESCALATED, it just is not forwarded to a console.
         self._review_router = review_router
@@ -183,7 +184,8 @@ class AdvisoryService:
         decision = Decision.ESCALATED if escalates else Decision.ALLOWED
         self._audit_briefing(actor, redacted_id, briefing, decision)
 
-        # 10) Rule R8: route the consequential briefing to the Hrz7 maker-checker console. The
+        # 10) Rule R8: route the consequential briefing to the human-review-console maker-checker
+        # console. The
         #     adapter redacts before the wire. Best-effort: a console outage must not fail an
         #     already-assembled, already-audited briefing (the audit ESCALATED record is the
         #     durable escalation of record, and the outbox path retries).

@@ -90,7 +90,7 @@ Records are already redacted before they are written. The hash chain alone canno
 full rewrite or tail truncation (it carries no secret); in production the `gcp` profile uses
 a Cloud Logging **locked WORM bucket** (retention configured in
 `infra/terraform/logging_worm.tf`), which provides non-rewritability itself. This repo does
-not *replace* the enterprise WORM audit system (**Hrz5**); it writes to it. See
+not *replace* the enterprise WORM audit system (`agent-observability`); it writes to it. See
 [features-faq.md](features-faq.md) for the boundary.
 
 ### Is there rate limiting / request-size control?

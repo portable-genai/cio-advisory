@@ -23,10 +23,10 @@ the assistant is never ungrounded.
 
 ### Where does an escalation actually go?
 
-To the sibling **Hrz7 Human-Review & Maker-Checker Console** (mandatory rule R8). Every
+To the sibling **`human-review-console` Human-Review & Maker-Checker Console** (mandatory rule R8). Every
 escalated briefing is submitted via the shared `review-kit` client, redact-before-wire:
 the `local` profile enqueues to a transactional outbox so the routing path runs offline, and
-`gcp`/`platform` submit over S2S to Hrz7's intake (`HUMAN_REVIEW_URL`). See
+`gcp`/`platform` submit over S2S to `human-review-console`'s intake (`HUMAN_REVIEW_URL`). See
 `ports/review_router.py` and `adapters/{local,platform,onprem}/review_router.py`. The
 maker-checker escalation is a routed action, not a boolean left on the record.
 
@@ -40,7 +40,7 @@ checksum validators and RE2-safe forms), selected by `pii.jurisdictions` (or
 `CIO_PII_JURISDICTIONS`) so a non-Singapore deployment scrubs, and gates on, its own
 identifiers. The local regex redactor, the GCP DLP custom info types, and the eval leak check
 all read that one source, so there is no drift between them. The runtime guardrail / DLP
-gateway itself is the sibling **Hrz1** service; this repo consumes it rather than
+gateway itself is the sibling `agent-guardrail-gateway` service; this repo consumes it rather than
 re-implementing it.
 
 ### How is the work auditable / reproducible?
@@ -50,7 +50,7 @@ and its citation set (P-07). Every talking point carries its supporting `Citatio
 The consequential logic, the suitability verdicts and the portfolio-alignment math, is
 **deterministic and replayable** (pure stdlib, unit-tested), so an auditor can recompute
 every verdict from the same inputs without the model. The enterprise WORM audit system is
-**Hrz5**; the in-repo hash-chained store is the offline/local stand-in (see
+`agent-observability`; the in-repo hash-chained store is the offline/local stand-in (see
 [security-faq.md](security-faq.md) for its exact tamper-evidence limits).
 
 ### What is the model-risk story?
@@ -59,7 +59,7 @@ An offline eval gate (`eval/run_eval.py`) scores groundedness, suitability accur
 accuracy, and the `no_advice_safety` / `pii_safety` safety metrics (each threshold 0.99)
 against a fictional golden set, failing the build below threshold (P-08). It runs in CI on
 `CIO_PROFILE=onprem` with no org secrets. The enterprise judged pre-promotion gate and model
-documentation / red-team harness are the sibling **Hrz4** system (rule R5); this repo's gate
+documentation / red-team harness are the sibling `model-quality-gate` system (rule R5); this repo's gate
 mirrors its thresholds so merges are guarded locally. A fork must rebuild the golden set for
 its own vertical, or the gate measures the wrong thing.
 
@@ -69,8 +69,7 @@ its own vertical, or the gate measures the wrong thing.
 (Singapore) posture as the built reference (`asia-southeast1` residency, the suitability and
 non-advice framing). To extend to FCA / MAS FAA / HKMA / APRA suitability regimes, own the
 `suitability.concentration_limit` and the risk-appetite / complex-asset gates in
-`domain/suitability_policy.py` with local counsel and re-review. At scale, the sibling **Rsk1
-compliance assistant** answers the regulatory-checklist questions and a control-mapping
+`domain/suitability_policy.py` with local counsel and re-review. At scale, the sibling **`compliance-advisory`** answers the regulatory-checklist questions and a control-mapping
 toolkit maintains the crosswalks; a large estate should integrate them rather than
 hand-maintain the mapping.
 
@@ -79,9 +78,8 @@ hand-maintain the mapping.
 Yes, at deploy time: a single in-country region (default `asia-southeast1` / Singapore),
 validated to fail fast, with regional endpoints, a `gcp.resourceLocations` Org Policy
 allowlist, CMEK bound per data-bearing service, and a VPC-SC perimeter (P-03, P-09). The
-residency-violation CI gate is the sibling **Rsk3** `architecture-validator`
-(`domain/residency/`); the exit / concentration-risk plan is **Rgc9**
-`operational-resilience-mapping` (`domain/concentration_exit/`). This repo enforces residency in
+residency-violation CI gate is the sibling `architecture-validator`
+(`domain/residency/`); the exit / concentration-risk plan is `operational-resilience-mapping` (`domain/concentration_exit/`). This repo enforces residency in
 its own infra and is one of the systems those tools reason about.
 
 ### Can we run it against real client data today?
