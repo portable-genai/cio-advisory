@@ -1,9 +1,9 @@
 # On-prem migration guide
 
-Doc3 is reversible by construction (P-02, P-12). The on-prem adapter family
+`cio-advisory` is reversible by construction (P-02, P-12). The on-prem adapter family
 (`src/cio_advisory/adapters/onprem/`) is the migration target: each placeholder constructs
 cleanly with no external dependencies, structurally satisfies the same port as the managed
-adapter, and raises `NotImplementedError` from every method. Porting Doc3 to an on-premise
+adapter, and raises `NotImplementedError` from every method. Porting `cio-advisory` to an on-premise
 platform is a matter of filling those bodies in; the domain core and the service callers do
 not change.
 

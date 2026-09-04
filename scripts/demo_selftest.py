@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Credential-free anti-rot check for the real Doc3 presenter demo.
+"""Credential-free anti-rot check for the real cio-advisory presenter demo.
 
 Two stages, both executed, neither reading hard-coded prose:
 

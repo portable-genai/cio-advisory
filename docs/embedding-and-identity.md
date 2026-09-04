@@ -251,8 +251,7 @@ The active profile selects the adapter, exactly like every other port:
 | `gcp` / `platform` | `IapIdentityAdapter` | Verifies the signed `x-goog-iap-jwt-assertion` (signature, issuer, audience, expiry) against Google's IAP public keys. `tenant` from the `hd` claim. Audience from `CIO_IAP_AUDIENCE`; the assertion is never logged. |
 | `onprem` | `OnPremIdentityAdapter` | Fail-closed placeholder: raises `NotImplementedError` rather than returning an anonymous identity. Implement verification against your own enterprise IdP (OIDC/SAML) here. |
 
-Defense in depth (PEP): the edge (Cloud IAP / Apigee) authenticates at ingress, the Hrz1
-guardrail applies central policy, and this backend independently re-verifies the assertion and
+Defense in depth (PEP): the edge (Cloud IAP / Apigee) authenticates at ingress, the `agent-guardrail-gateway` applies central policy, and this backend independently re-verifies the assertion and
 derives identity itself. Each layer assumes the others may be bypassed. This is the seam that
 defeats actor spoofing and the confused-deputy risk.
 

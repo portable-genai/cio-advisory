@@ -2,7 +2,7 @@
 
 The local profile grounds briefings on a fictional CIO corpus; a real demo cannot. This
 adapter derives the day's investment themes from REAL published market commentary via
-Gemini ``google_search`` grounding (the same research pattern as Doc1's live adverse
+Gemini ``google_search`` grounding (the same research pattern as cdd-sow-research's live adverse
 media): the model searches current public market-outlook coverage from major banks'
 CIO offices and asset managers, and answers with structured themes, each carrying the
 real source headline and URL, which become the briefing's citations.

@@ -1,4 +1,4 @@
-# Doc3 CIO Advisory Assistant
+# `cio-advisory` CIO Advisory Assistant
 
 **Industries:** Wealth & asset management, Private banking, Bancassurance, Brokerage & capital markets
 
@@ -11,7 +11,7 @@ Platform and pinned to `asia-southeast1` (Singapore) for residency.
 > and is responsible for any advice given to the client. The sample client/portfolio data
 > shipped here is fictional.
 
-Doc3 connects the bank's **CIO house views** (retrieved from the governed Hrz2 knowledge base)
+`cio-advisory` connects the bank's **CIO house views** (retrieved from the governed `enterprise-knowledge-base` knowledge base)
 to a specific **client's portfolio**, and produces personalised talking points, each with a
 suitability verdict (SUITABLE / REVIEW / UNSUITABLE) and citations. Unsuitable points are
 dropped, never presented as a recommendation.
@@ -34,27 +34,27 @@ flowchart LR
   SVC -. ports .-> ADP{"Adapter profile"}
   ADP -->|gcp| GCP["Gemini · BigQuery · Model Armor · DLP · Cloud Logging"]
   ADP -->|local| LOC["Offline laptop stack (SQLite FTS5 · deterministic LLM · regex DLP)"]
-  ADP -->|platform| SIB["Hrz1 guardrail · Hrz2 KB · Hrz3 registry · Hrz4 quality · Hrz5 audit"]
+  ADP -->|platform| SIB["`agent-guardrail-gateway` · `enterprise-knowledge-base` · `agent-registry` · `model-quality-gate` quality · `agent-observability`"]
   ADP -->|onprem| ONP["On-prem placeholders (migration target)"]
   SVC --> OUT["AdvisoryBriefing (not advice, cited, human-review)"]
 ```
 
 ## The pipeline (R1 full safety)
 
-Doc3 handles customer PII, so the full Hrz1 redaction plus guardrail pipeline runs on every
-request, exactly like Rsk1 and Doc1.
+`cio-advisory` handles customer PII, so the full `agent-guardrail-gateway` redaction plus guardrail pipeline runs on every
+request, exactly like `compliance-advisory` and `cdd-sow-research`.
 
 ```mermaid
 sequenceDiagram
   participant RM as RM
   participant S as AdvisoryService
-  participant R as Redaction (Hrz1 DLP)
-  participant G as Guardrail (Hrz1 Model Armor)
+  participant R as Redaction (`agent-guardrail-gateway` DLP)
+  participant G as Guardrail (`agent-guardrail-gateway` Model Armor)
   participant P as Portfolio (BigQuery)
-  participant K as House views (Hrz2 KB)
+  participant K as House views (`enterprise-knowledge-base`)
   participant L as LLM (Gemini)
   participant Q as SuitabilityPolicy
-  participant A as Audit (Hrz5 WORM)
+  participant A as Audit (`agent-observability` WORM)
 
   RM->>S: brief(client_id, actor)
   S->>R: redact(inputs)
@@ -83,7 +83,7 @@ pip install -e ".[dev]"
 # Tests + lint + eval run on the local profile (no GCP SDK).
 make test
 make lint
-make eval        # the Hrz4-style offline promotion gate
+make eval        # the `model-quality-gate`-style offline promotion gate
 
 # Build a real, cited, suitability-tagged briefing offline. The house-view corpus and a
 # couple of synthetic clients are seeded automatically; client-000042 is a balanced client.
@@ -113,7 +113,7 @@ DLP, so those always use the SDK-free workaround.
 |---|---|---|
 | `gcp` | Managed Gemini Enterprise Agent Platform | Standalone production |
 | `local` | Offline SQLite FTS5 + deterministic LLM (SDK-free) | Dev, tests, CI, demos |
-| `platform` | HTTP clients to Hrz1 / Hrz2 / Hrz3 / Hrz4 / Hrz5 | Inside the full platform |
+| `platform` | HTTP clients to `agent-guardrail-gateway` / `enterprise-knowledge-base` / `agent-registry` / `model-quality-gate` / `agent-observability` | Inside the full platform |
 | `onprem` | Placeholders (migration target) | On-prem port, fail-fast |
 
 Switch with `CIO_PROFILE`, and always set it: an unset variable binds the offline adapters
@@ -149,7 +149,7 @@ ui/              React / Next.js front end (source only)
 
 ## Cost and latency
 
-Size this system's cost and latency with the shared interactive calculator: [**live**](https://portable-genai.github.io/cost-latency-calculator/calc/calculator.html?system=Doc3) or the [in-repo page](cost-latency-calculator.html). The engine and the pricing book are maintained once in [cost-latency-calculator](https://github.com/portable-genai/cost-latency-calculator).
+Size this system's cost and latency with the shared interactive calculator: [**live**](https://portable-genai.github.io/cost-latency-calculator/calc/calculator.html?system=cio-advisory) or the [in-repo page](cost-latency-calculator.html). The engine and the pricing book are maintained once in [cost-latency-calculator](https://github.com/portable-genai/cost-latency-calculator).
 
 ## License
 

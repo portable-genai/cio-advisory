@@ -7,7 +7,7 @@ here. Read it first. This file carries only what is specific to this one.
 
 ## What this is
 
-Catalog id **Doc3**. RAG over the bank's CIO house-view articles + the client's
+Catalog id `cio-advisory`. RAG over the bank's CIO house-view articles + the client's
 portfolio -> personalised, suitability-checked RM talking points (decision-support, NOT
 advice).
 
@@ -15,7 +15,7 @@ advice).
 
 | | |
 |---|---|
-| Catalog id | `Doc3` |
+| Catalog id | `cio-advisory` |
 | Package | `src/cio_advisory/` |
 | Profile variable | `CIO_PROFILE` |
 | Adapter families | `gcp`, `live`, `local`, `onprem`, `platform` |

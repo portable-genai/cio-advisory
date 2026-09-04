@@ -222,7 +222,8 @@ class AuditEvent:
 # self.results)``. ``all(())`` is vacuously true, so a report that scored nothing used to
 # certify a promotion; both extra guards survive the move, and
 # ``tests/unit/test_eval_report_gate.py`` still pins them. The commons report additionally
-# carries the durable promotion evidence the hardened Hrz4 service attests with, all of it
+# carries the durable promotion evidence the hardened model-quality-gate service attests with, all
+# of it
 # defaulted, so the move is purely additive.
 
 

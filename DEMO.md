@@ -1,6 +1,6 @@
-# Demo guide - Doc3 CIO Advisory Assistant
+# Demo guide - `cio-advisory` CIO Advisory Assistant
 
-Step-by-step scripts for demoing Doc3 two ways:
+Step-by-step scripts for demoing `cio-advisory` two ways:
 
 - **Demo A - Suitability-checked advisory briefings, fully offline** (the headline flow):
   for two synthetic clients the assistant runs the whole pipeline - redact, guardrail,

@@ -1,16 +1,16 @@
 # Common-base practices audit
 
 - **Repo:** `cio-advisory`
-- **Catalog id:** Doc3 (package `cio_advisory`, env prefix `CIO`)
+- **Catalog id:** `cio-advisory` (package `cio_advisory`, env prefix `CIO`)
 - **Authoritative source:** reconciled to the maintainer's
   cross-repository audit matrix,
   authoritative on verdicts.
 - **Catalogue reference:** [`common-base-practices.md`](https://github.com/portable-genai/.github/blob/main/common-base-practices.md) (checks A1..G7)
 - **Note:** Each check below was re-run against the current tree with this repo's names
   substituted for the reference repo's (`cio_advisory` for `ccd_sow_agent`, `CIO` for `CDD`),
-  not assumed from Doc1. Evidence lines cite this repo's own paths.
+  not assumed from `cdd-sow-research`. Evidence lines cite this repo's own paths.
 
-Applicability: Doc3 ships a UI (`ui/`) and Terraform (`infra/terraform/`), so `[ui]` and
+Applicability: `cio-advisory` ships a UI (`ui/`) and Terraform (`infra/terraform/`), so `[ui]` and
 `[infra]` checks apply. It is agentic (`LLMPort` + `AgentRuntimePort`), so `[agentic]` applies.
 **Load-bearing** checks (a FAIL breaks a shared catalog guarantee) are A1-A6, C1-C5, D1-D3 and E1:
 here **all of them PASS**, so no load-bearing check is PARTIAL and none FAILs. G4 is a retired
@@ -46,7 +46,7 @@ practice.
 | **D3** Whole gate runs offline, zero org secrets `[all]` **(load-bearing)** | PASS | `ci.yaml` (`CIO_PROFILE: local`) runs ruff + ruff format --check + mypy + pytest; `eval-gate.yaml` (`CIO_PROFILE: onprem`) runs the offline eval; neither references `secrets.` -> a fork's CI is green day one. |
 | **D4** Non-root, minimal, healthchecked container `[infra]` | PASS | `Dockerfile` multi-stage (builder + slim runtime), `USER appuser`, `HEALTHCHECK` on the health endpoint, `EXPOSE 8091`, `CIO_PROFILE=gcp` selected explicitly; runtime stage carries no build toolchain. (Unlocked install is scored under D1.) |
 | **D5** Deploy-time residency/sovereignty, parameterised `[infra]` | PASS | Singapore pinning, Org Policy, CMEK, VPC-SC and WORM controls are CI-gated by Terraform fmt/init/validate; no provider binaries are tracked. Live enforcement still needs named deployment evidence. |
-| **E1** Offline eval smoke guards merge; Hrz4 owns promotion `[agentic]` **(load-bearing)** | PASS | `eval/run_eval.py` has the `--mode smoke|gate` split via the shared `agent-eval-kit` scaffold; `remote_eval_gate.py` re-based on the shared `PromotionGateClient` (registered bundle `doc3-cio-advisory` unchanged, incl. the `no_advice_safety` metric; S2S headers attached); gate mode refuses to run outside `CIO_PROFILE=platform|gcp`. |
+| **E1** Offline eval smoke guards merge; `model-quality-gate` owns promotion `[agentic]` **(load-bearing)** | PASS | `eval/run_eval.py` has the `--mode smoke|gate` split via the shared `agent-eval-kit` scaffold; `remote_eval_gate.py` re-based on the shared `PromotionGateClient` (registered bundle `doc3-cio-advisory` unchanged, incl. the `no_advice_safety` metric; S2S headers attached); gate mode refuses to run outside `CIO_PROFILE=platform|gcp`. |
 | **E2** Safety metric with strictest threshold, no false green `[agentic]` | PASS | `no_advice_safety >= 0.99` keeps its independent oracle, and the `pii_safety >= 0.99` metric closes all three false-green paths. *Detector drift:* the leak check reads the same shared `pii-kit` rows as the runtime redactor, so a leak means the pipeline re-introduced PII rather than two bespoke implementations disagreeing. *A faked subject:* the gate runs the production `LocalRegexRedactionAdapter` (pure regex, no SDK), never a no-op stand-in. *A blind pack:* scoring only off the pack the redactor masks with is a closed loop (a narrowed row can neither mask nor detect, scoring a vacuous 1.0 with the raw id in the audit), so the gate also runs `pii_kit.planted_leak` (a pack-independent literal check of each client's planted identifier) ALONGSIDE `pack_leak`. Proven able to fail: with redaction disabled every PII-bearing case drops 1.0 -> 0.0 and the gate goes RED, per market. The shared jurisdiction list is itself guarded: a golden client whose market is absent from the configured pack **raises** rather than scoring a vacuous 1.0. |
 | **E3** Fixtures and golden data obviously fictional `[all]` | PASS | `eval/datasets/golden_clients.jsonl` uses opaque synthetic ids (`client-000042`, `client-000077`); COMPLIANCE.md "Synthetic data only" and DEMO.md carry the fictional/live-data warning. |
 | **F1** Demo is code, offline, one command, presenter-paced `[all]` | PASS | `make demo` -> `scripts/cio_demo.py` + `scripts/render_cio_ui.py` (offline, real `AdvisoryService`, static audit-first HTML); `make demo-server` -> `scripts/cio_demo_server.py` presenter-controlled on :8099; no cloud or API key. |
@@ -56,7 +56,7 @@ practice.
 | **G2** Compliance mapping table + adopter-owned crosswalk `[all]` | PASS | COMPLIANCE now includes an explicitly adopter-owned regulator crosswalk with applicability, owner and evidence fields. |
 | **G3** Documented, mechanised fork path `[all]` | PASS | `docs/ADOPTING.md` documents the neutral-machinery vs vertical boundary (§1), the core-vs-adopter-owned file list (§2), the one-pass rename (§3) and a §4 human-decision checklist (region, IdP, PII pack, suitability policy, fixtures, eval golden set). `scripts/rename_fork.py` is the mechanical rename (`_OLD_PACKAGE=cio_advisory`, `_OLD_CLI=cio-advisory`, `_OLD_ENV_PREFIX=CIO_`, `_OLD_RESOURCE=cio-advisory`, `_OLD_DIST=cio-advisory`, dist default `--resource`); a `--dry-run` prints the plan (64 files / 345 replacements) and writes nothing (exit 0, tree stays git-clean). |
 | **G4** Retired `[all]` | N-A (retired) | Retired practice. Releases are tracked by git tag and the `pyproject.toml` version. |
-| **G5** Role-specific FAQs referencing sibling systems `[all]` | PASS | `docs/faq/` has a `README.md` audience index plus five role FAQs (`security-faq.md`, `portability-faq.md`, `features-faq.md`, `adoption-faq.md`, `compliance-faq.md`); each names the owning catalog id for adjacent capabilities (Hrz1 guardrail, Hrz2 house-view KB, Hrz3 registry, Hrz4 eval / model-risk, Hrz5 WORM audit, Hrz7 human-review console, Rsk1 compliance assistant, Rsk3 architecture / residency validator, Rgc9 operational resilience and exit, Rsk6 on-prem DLP) and explains the boundary rather than duplicating it. |
+| **G5** Role-specific FAQs referencing sibling systems `[all]` | PASS | `docs/faq/` has a `README.md` audience index plus five role FAQs (`security-faq.md`, `portability-faq.md`, `features-faq.md`, `adoption-faq.md`, `compliance-faq.md`); each names the owning catalog id for adjacent capabilities (`agent-guardrail-gateway`, `enterprise-knowledge-base` house-view KB, `agent-registry`, `model-quality-gate` eval / model-risk, `agent-observability`, `human-review-console`, `compliance-advisory`, `architecture-validator` architecture / residency validator, `operational-resilience-mapping` operational resilience and exit, `onprem-dlp` on-prem DLP) and explains the boundary rather than duplicating it. |
 | **G6** Contribution docs cover full extension touch list `[all]` | PASS | CONTRIBUTING lists adapter and sub-service touch points; `test_port_protocols_matches_settings_adapters` enforces two-way settings/Protocol parity. |
 | **G7** Markdown discipline: minimise em-dashes, validate mermaid `[all]` | PASS | A grep for the em-dash character returns 0 across all root docs (README, SPEC, ARCHITECTURE, COMPLIANCE, DEMO, CONTRIBUTING) and `docs/*.md`, including this scorecard. |
 
@@ -66,7 +66,7 @@ pinned headless browser drives the served demo in `make demo-browser`.
 
 ## Gaps carried to systems/
 
-No open gap remains for the Doc3 row of the maintainer's per-system register under `Capability
+No open gap remains for the `cio-advisory` row of the maintainer's per-system register under `Capability
 gaps`.
 
 **Open quality findings: none.** Named deployment inputs and execution evidence (a named GCP

@@ -1,6 +1,6 @@
-# Doc3 CIO Advisory Assistant : Terraform (Singapore-resident, sovereign deploy)
+# `cio-advisory` CIO Advisory Assistant : Terraform (Singapore-resident, sovereign deploy)
 
-This module provisions the full **Singapore-resident** managed stack for the Doc3 CIO
+This module provisions the full **Singapore-resident** managed stack for the `cio-advisory` CIO
 Advisory Assistant. Every resource takes its location from `var.region`, which is chosen
 at deploy time and validated against the `allowed_regions` residency allowlist (default
 `["asia-southeast1"]`); only `project_id` and a few genuinely per-tenant values are variables.
@@ -9,7 +9,7 @@ It maps directly to the pinned stack in `SPEC.md §3`:
 
 | Concern | Resource(s) |
 |---|---|
-| House-view retrieval (Agent Search / File Search) | enabled in `apis.tf`; store created via SDK, governed KB is Hrz2 |
+| House-view retrieval (Agent Search / File Search) | enabled in `apis.tf`; store created via SDK, governed KB is `enterprise-knowledge-base` |
 | Reasoning/Triage models + Runtime | `agent_runtime.tf` (engine deployed via SDK) |
 | Guardrail (Model Armor) | `model_armor.tf` |
 | PII redaction (DLP) | `dlp.tf` |
@@ -20,9 +20,9 @@ It maps directly to the pinned stack in `SPEC.md §3`:
 | Residency controls | `org_policy.tf`, `vpc_sc.tf` |
 | Least-privilege identities | `iam.tf`, `agent_runtime.tf` |
 
-The governed CIO house-view knowledge base itself (Hrz2 Enterprise KB) is provisioned by the
-Hrz2 repo, not here: Doc3 retrieves from it over HTTP (`/v1/search`). This module only
-provisions the standalone File Search store enablement plus Doc3's own data plane.
+The governed CIO house-view knowledge base itself (`enterprise-knowledge-base`) is provisioned by the
+`enterprise-knowledge-base` repo, not here: `cio-advisory` retrieves from it over HTTP (`/v1/search`). This module only
+provisions the standalone File Search store enablement plus `cio-advisory`'s own data plane.
 
 ## Prerequisites
 

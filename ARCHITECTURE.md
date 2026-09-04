@@ -1,6 +1,6 @@
-# Doc3 Architecture
+# `cio-advisory` Architecture
 
-Doc3 is a hexagonal (ports-and-adapters) application. A pure domain core owns all advisory
+`cio-advisory` is a hexagonal (ports-and-adapters) application. A pure domain core owns all advisory
 logic and the regulatory suitability policy; it talks only to **ports** (Protocols). Three
 families of **adapters** satisfy those ports : managed GCP, platform HTTP siblings, and
 on-prem placeholders : selected by one `CIO_PROFILE` switch. Nothing in the domain changes
@@ -46,8 +46,8 @@ flowchart TB
   end
 
   subgraph PLATFORM["adapters/platform (HTTP siblings)"]
-    PL1["Hrz2 KB · Hrz1 guardrail and redaction"]
-    PL2["Hrz5 audit · Hrz3 registry · Hrz4 eval gate"]
+    PL1["`enterprise-knowledge-base` · `agent-guardrail-gateway` and redaction"]
+    PL2["`agent-observability` · `agent-registry` · `model-quality-gate`"]
   end
 
   subgraph ONPREM["adapters/onprem (migration target)"]
@@ -72,19 +72,19 @@ port, that `onprem` fails fast, and that `local` answers in-process.
 
 | Port | gcp | local | platform | onprem |
 |---|---|---|---|---|
-| `house_view` | File Search | SQLite FTS5 (BM25) | Hrz2 KB `/v1/search` | placeholder |
+| `house_view` | File Search | SQLite FTS5 (BM25) | `enterprise-knowledge-base` `/v1/search` | placeholder |
 | `portfolio` | BigQuery | in-process synthetic | n/a (internal data) | placeholder |
 | `llm` | Gemini | deterministic schema-driven | n/a | placeholder |
 | `grounding` | `google_search` | disabled (no egress) | n/a | placeholder (off) |
-| `guardrail` | Model Armor | heuristic | Hrz1 gateway | placeholder |
-| `redaction` | DLP | regex | Hrz1 gateway | placeholder |
+| `guardrail` | Model Armor | heuristic | `agent-guardrail-gateway` | placeholder |
+| `redaction` | DLP | regex | `agent-guardrail-gateway` | placeholder |
 | `agent_runtime` | Agent Engine | in-process | n/a | placeholder |
 | `session` | Vertex Sessions | in-process | n/a | placeholder |
 | `memory` | Vertex Memory Bank | in-process | n/a | placeholder |
-| `audit` | Cloud Logging WORM | append-only SQLite | Hrz5 service | placeholder |
+| `audit` | Cloud Logging WORM | append-only SQLite | `agent-observability` service | placeholder |
 | `tracer` | Cloud Trace | no-op | n/a | placeholder |
-| `evaluation` | Gen AI eval | in-repo offline gate | Hrz4 service | placeholder |
-| `registry` | A2A in-process | in-process | Hrz3 service | placeholder |
+| `evaluation` | Gen AI eval | in-repo offline gate | `model-quality-gate` service | placeholder |
+| `registry` | A2A in-process | in-process | `agent-registry` service | placeholder |
 | `tool_catalog` | MCP | in-process | n/a | placeholder |
 
 `portfolio` has no platform binding: client portfolios are internal data and never leave
@@ -100,7 +100,7 @@ flowchart LR
   RED --> GIN["guardrail INPUT"]
   GIN -->|blocked| AUD1["audit BLOCKED then raise"]
   GIN -->|allowed| LOAD["load profile and portfolio"]
-  LOAD --> RET["retrieve CIO house views (Hrz2)"]
+  LOAD --> RET["retrieve CIO house views (`enterprise-knowledge-base`)"]
   RET -->|empty| ERR["RetrievalEmptyError"]
   RET --> SYN["LLM synthesise talking points"]
   SYN --> SUIT["SuitabilityPolicy per theme"]
@@ -116,7 +116,7 @@ flowchart LR
 
 ## Why the suitability policy is its own module
 
-`SuitabilityPolicy` is the regulatory heart of Doc3 and the most heavily tested unit. It is
+`SuitabilityPolicy` is the regulatory heart of `cio-advisory` and the most heavily tested unit. It is
 pure decision logic with no I/O, so its rules (risk-appetite gating, hard exclusions,
 concentration breach, knowledge gap) are unit-tested directly and exercised end-to-end by
 the eval gate's `suitability_accuracy` metric. The worst (most cautious) verdict across all

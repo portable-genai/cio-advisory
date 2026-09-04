@@ -38,7 +38,8 @@ def _adapter(monkeypatch: pytest.MonkeyPatch) -> RemoteEvalGateAdapter:
 def test_evaluate_posts_hardened_contract_and_parses_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The hardened Hrz4 /v1/evaluations response carries the durable identifiers on the
+    # The hardened model-quality-gate /v1/evaluations response carries the durable identifiers on
+    # the
     # PLAIN evaluation path too (the hardened ``_parse`` refuses a body without them), so the
     # fixture models the full shape, n_examples included: omitting the count left it at 0,
     # and the old fail-open verdict still read PASSED, a promotion certified by nothing.
@@ -86,7 +87,8 @@ def test_evaluate_posts_hardened_contract_and_parses_results(
 
 @respx.mock
 def test_evaluate_carries_the_attested_evidence_through(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The durable identifiers Hrz4 attested with must survive the adapter, not be dropped.
+    """The durable identifiers model-quality-gate attested with must survive the adapter, not be
+    dropped.
 
     An adapter that rebuilds the report from three fields (dataset, results, n_examples)
     silently discards the run id, the dataset version and digest, the evaluator, the
@@ -112,7 +114,8 @@ def test_evaluate_carries_the_attested_evidence_through(monkeypatch: pytest.Monk
 def _attested_eval_report() -> dict:
     """Attested evaluation evidence in the full hardened shape, obviously fictional.
 
-    Every score/threshold/passed row is internally CONSISTENT, because the hardened Hrz4
+    Every score/threshold/passed row is internally CONSISTENT, because the hardened
+    model-quality-gate
     contract (``agent_eval_kit.gate_client.PromotionGateClient._parse``) re-derives each
     verdict and refuses a contradiction rather than trusting the flag.
     """
@@ -132,7 +135,8 @@ def _attested_eval_report() -> dict:
     }
 
 
-#: The complete GateDecision the hardened Hrz4 promotion endpoint returns: attested eval
+#: The complete GateDecision the hardened model-quality-gate promotion endpoint returns: attested
+#: eval
 #: evidence with durable identifiers, a red-team report whose aggregate matches its rows,
 #: the model-card and MRM references, and a top-level verdict consistent with all of it. A
 #: naked ``{"passed": true}`` is the unhardened thin shape and does not model the
