@@ -73,7 +73,7 @@ port, that `onprem` fails fast, and that `local` answers in-process.
 | Port | gcp | local | platform | onprem |
 |---|---|---|---|---|
 | `house_view` | File Search | SQLite FTS5 (BM25) | `enterprise-knowledge-base` `/v1/search` | placeholder |
-| `portfolio` | BigQuery | in-process synthetic | n/a (internal data) | placeholder |
+| `portfolio` | BigQuery | DuckDB (same tables) | n/a (internal data) | placeholder |
 | `llm` | Gemini | deterministic schema-driven | n/a | placeholder |
 | `grounding` | `google_search` | disabled (no egress) | n/a | placeholder (off) |
 | `guardrail` | Model Armor | heuristic | `agent-guardrail-gateway` | placeholder |

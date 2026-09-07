@@ -8,8 +8,11 @@ Search / Agent Search, so this path is unconditional (no emulator branch).
 
 The adapter returns the same :class:`HouseView` objects (with page-level :class:`Citation`
 provenance) as the managed adapter, preserving interface parity. It self-seeds from the
-built-in synthetic corpus on first use so an out-of-the-box local run grounds a briefing
-without any ingestion step; callers (and tests) may also ``seed(house_views)`` their own.
+shipped fictional corpus (``cio_advisory.data.demo_book``) on first use so an out-of-the-box
+local run grounds a briefing without any ingestion step; callers (and tests) may also
+``seed(house_views)`` their own. Never under ``live``: a house view is the EVIDENCE a talking
+point cites, so a fictional one must not reach a briefing that claims real research. The
+fictional CLIENT book is a different matter and does seed under live, in ``portfolio.py``.
 
 Default DB path is under a per-package local dir (``~/.cio_advisory/local.db``); tests
 pass ``:memory:`` for an ephemeral, deterministic index.
@@ -22,10 +25,10 @@ import sqlite3
 import threading
 from pathlib import Path
 
+from ... import demo_book
 from ...config import Settings
 from ...domain._grounded import coerce_asset_class, coerce_stance
 from ...domain.models import Citation, HouseView, SourceType
-from ._seed import SEED_HOUSE_VIEWS
 
 # Default on-disk location for the local index (overridable via settings.local.db_path).
 _DEFAULT_DB_DIR = Path.home() / ".cio_advisory"
@@ -61,7 +64,7 @@ class LocalFtsHouseViewAdapter:
         research, and a fictional CIO publication must not slip into a real briefing.
         """
         if self._settings.profile != "live" and self._is_empty():
-            self.seed(SEED_HOUSE_VIEWS)
+            self.seed(demo_book.house_views())
 
     # ------------------------------------------------------------------ #
     # Connection / schema

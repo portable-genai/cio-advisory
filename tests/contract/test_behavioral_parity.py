@@ -36,7 +36,6 @@ import json
 import pytest
 import respx
 
-from cio_advisory.adapters.local._seed import BALANCED_CLIENT_ID
 from cio_advisory.config import Container, LocalSettings, Settings, instantiate
 from cio_advisory.domain.identity import Principal
 from cio_advisory.domain.models import (
@@ -50,6 +49,7 @@ from cio_advisory.domain.models import (
     SourceType,
 )
 from cio_advisory.domain.serialization import to_jsonable
+from tests.fixtures.sample_clients import BALANCED_CLIENT_ID
 
 CONFIG_PATH = "config/settings.yaml"
 
@@ -87,7 +87,7 @@ def _settings(profile: str) -> Settings:
         logging=base.logging,
         agent_engine=base.agent_engine,
         suitability=base.suitability,
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
         adapters=base.adapters,
     )
 

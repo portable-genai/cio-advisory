@@ -15,12 +15,15 @@ API_HOST    ?= 127.0.0.1  # no-auth local dev binds loopback; override deliberat
 API_PORT    ?= 8091
 UI_DIR      := ui
 TF_DIR      := infra/terraform
+PROJECT     ?= $(GOOGLE_CLOUD_PROJECT)
+TENANT      ?= demo-bank   # the deployment's is its IAP hosted domain, never this
 
 export CIO_PROFILE := $(PROFILE)
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
-        demo-browser portability ui-install ui-check run-api run-ui tf-plan clean
+        demo-browser portability ui-install ui-check run-api run-ui tf-plan clean \
+        demo-book-dry-run load-demo-book
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -45,9 +48,9 @@ fmt: ## Auto-format and auto-fix lint issues.
 
 lint: ## Lint (ruff), check formatting, and type-check (mypy).
 	ruff check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py
 	ruff format --check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py
 	mypy $(SRC)
 
 test: ## Run unit + contract tests on the local profile (no GCP SDK required).
@@ -106,6 +109,12 @@ run-api: ## Run the FastAPI service (PROFILE=$(PROFILE)).
 
 run-ui: ## Run the React / Next.js UI (dev server).
 	cd $(UI_DIR) && npm install && npm run dev
+
+demo-book-dry-run: ## Write the NDJSON the loader WOULD send to BigQuery, and stop.
+	$(PYTHON) scripts/load_demo_book.py --tenant $(TENANT) --dry-run build/demo-book
+
+load-demo-book: ## Load the fictional client book into a deployment's dataset (needs TENANT).
+	$(PYTHON) scripts/load_demo_book.py --project $(PROJECT) --tenant $(TENANT)
 
 tf-plan: ## Terraform plan for the asia-southeast1 infrastructure.
 	cd $(TF_DIR) && terraform init -input=false && terraform plan

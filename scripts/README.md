@@ -13,10 +13,11 @@ shell has a different profile set.
 
 | Script | What it does |
 |--------|--------------|
-| `cio_demo.py` | Builds the suitability-checked advisory briefing for the two synthetic clients through the real `AdvisoryService` and writes the artifact JSON (one entry per client). |
+| `cio_demo.py` | Builds the suitability-checked advisory briefing for the synthetic clients through the real `AdvisoryService` and writes the artifact JSON (one entry per client). |
 | `render_cio_ui.py` | Renders that JSON into static audit-first HTML pages (one per client + an index) for screenshots. |
 | `cio_demo_server.py` | A **live, click-through** server that builds the real briefings and reveals them one step per click, rendering the audit-first UI. |
 | `cio_demo_playwright.py` | A **presenter-controlled** Playwright walkthrough of the live server: it narrates each step and waits for you to press Enter before performing it. |
+| `load_demo_book.py` | Loads the shipped fictional client book into a deployment's BigQuery dataset. The one script here that is not offline: `--dry-run` writes the NDJSON and needs nothing, a real load needs credentials and the `[gcp]` extra. See [the runbook](../docs/runbook.md). |
 
 ## Static screenshots
 

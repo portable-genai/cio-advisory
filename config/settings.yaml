@@ -50,6 +50,9 @@ bigquery:
   dataset: wealth_portfolio
   portfolio_table: holdings
   profile_table: client_profiles
+  instruments_table: instruments
+  model_portfolio_table: model_portfolios
+  manifest_table: book_manifest
   location: asia-southeast1
 
 model_armor:
@@ -86,14 +89,20 @@ suitability:
 local:
   db_path: ${CIO_LOCAL_DB:-}         # SQLite FTS5 house-view index
   audit_path: ${CIO_LOCAL_AUDIT:-}   # append-only local audit store
+  book_path: ${CIO_LOCAL_BOOK:-}     # DuckDB client book (profiles, holdings, instruments,
+                                     # model portfolios), seeded from the shipped demo book
 
 # The `live` profile: real grounded market research, every model call the Gemini API.
 # There is deliberately NO local model server: house-view themes already come from
 # Gemini google_search research over real published market commentary, so this system
 # cannot run without leaving the data centre, and a local-model profile beside it would
 # demo a deployment nobody would buy (org decision, 2026-08-30). The profile needs
-# GOOGLE_CLOUD_PROJECT + ADC and the [gcp] extra. Clients/portfolios are
-# audience-registered (POST /v1/clients); the fictional samples never appear.
+# GOOGLE_CLOUD_PROJECT + ADC and the [gcp] extra. The fictional CIO corpus never
+# appears here: a house view is the EVIDENCE a talking point cites. The fictional
+# CLIENT book does, labelled as such, because a client record is the subject rather
+# than the evidence and a live lane with no book can only brief a portfolio typed in
+# a minute earlier (org decision, 2026-09-07). Audience registration (POST /v1/clients)
+# adds to the book rather than replacing it.
 live:
   max_output_tokens: ${CIO_LIVE_MAX_TOKENS:-2048}
   research_cache_path: ${CIO_LIVE_RESEARCH_CACHE:-}   # "" => ~/.cio_advisory/live-house-views.json

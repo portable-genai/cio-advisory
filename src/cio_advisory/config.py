@@ -178,6 +178,9 @@ class BigQuerySettings:
     dataset: str = "wealth_portfolio"
     portfolio_table: str = "holdings"
     profile_table: str = "client_profiles"
+    instruments_table: str = "instruments"
+    model_portfolio_table: str = "model_portfolios"
+    manifest_table: str = "book_manifest"
     location: str = "asia-southeast1"
 
 
@@ -293,6 +296,7 @@ class LocalSettings:
 
     db_path: str = ""  # SQLite FTS5 house-view index; "" => ~/.cio_advisory/local.db
     audit_path: str = ""  # append-only audit store;     "" => ~/.cio_advisory/audit.db
+    book_path: str = ""  # DuckDB client book;           "" => ~/.cio_advisory/book.duckdb
 
 
 @dataclass(frozen=True)

@@ -98,6 +98,8 @@ distro==1.9.0
     #   openai
 docstring-parser==0.18.0
     # via google-cloud-aiplatform
+duckdb==1.5.5
+    # via cio-advisory (pyproject.toml)
 fastapi==0.141.1
     # via
     #   cio-advisory (pyproject.toml)
@@ -112,7 +114,7 @@ frozenlist==1.8.0
     #   aiosignal
 fsspec==2026.7.0
     # via huggingface-hub
-google-adk==2.7.1
+google-adk==2.8.0
     # via
     #   cio-advisory (pyproject.toml)
     #   google-cloud-aiplatform

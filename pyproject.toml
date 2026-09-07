@@ -28,6 +28,12 @@ dependencies = [
   "fastapi>=0.111",
   "uvicorn[standard]>=0.30",
   "python-dateutil>=2.9",
+  # The laptop book. The local and live profiles serve client profiles, holdings, instruments
+  # and model portfolios from a DuckDB file self-seeded from the NDJSON demo book shipped in
+  # src/cio_advisory/data/demo_book/, so the offline store answers the same table shapes the
+  # managed adapter reads from BigQuery. An embedded engine in a wheel: no service, no
+  # credentials, nothing to start.
+  "duckdb>=1.4",
   # Shared jurisdiction PII pattern pack (SG/HK/JP/AU rows + checksum validators + RE2-safe
   # forms + the two-part safety scorer). Pure stdlib, zero deps, public. Pinned by tag: the
   # local redactor, the DLP custom info types and the eval leak check all read ONE source, so

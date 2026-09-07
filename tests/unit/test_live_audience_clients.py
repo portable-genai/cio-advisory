@@ -2,8 +2,14 @@
 
 Pinned here:
 
-* the live profile never serves the fictional sample clients or house views: the
-  portfolio store starts empty and the FTS index does not self-seed;
+* the live profile draws the line between fiction that may appear and fiction that may
+  not: the fictional CLIENT book seeds (it is the subject of a briefing) and the fictional
+  HOUSE VIEWS do not (they are the evidence a talking point cites, and live claims real
+  research). This test used to assert the portfolio store started empty too, which was the
+  behaviour before the 2026-09-07 decision: a live lane with no book could only brief a
+  portfolio registered a minute earlier, so the gaps a briefing is about had nowhere to come
+  from. The half that still holds is asserted harder here, because it is the half that would
+  put an invented CIO publication behind a real-looking citation;
 * client registration stamps the VERIFIED principal's tenant (never the body), the
   registered client is then briefable by its own tenant, and the template downloads;
 * the grounded research adapter maps structured themes onto cited HouseViews, drops
@@ -34,27 +40,30 @@ def _settings(profile: str, **live_kwargs) -> Settings:
         profile=profile,
         adapters=base.adapters,
         suitability=base.suitability,
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
         live=LiveSettings(**live_kwargs) if live_kwargs else base.live,
     )
 
 
 # --------------------------------------------------------------------------- #
-# No fiction under live
+# What fiction may appear under live, and what may not
 # --------------------------------------------------------------------------- #
-def test_live_portfolio_store_starts_empty_and_local_does_not() -> None:
+def test_the_client_book_serves_under_live_exactly_as_it_does_under_local() -> None:
+    """The subject of a briefing is the same book on both laptop profiles."""
     local = LocalPortfolioAdapter(_settings("local"))
-    assert local.get_profile("client-000042").id == "client-000042"
-
     live = LocalPortfolioAdapter(_settings("live"))
-    with pytest.raises(KeyError):
-        live.get_profile("client-000042")
-    assert live.client_ids("demo-bank") == []
+    assert live.get_profile("client-000042") == local.get_profile("client-000042")
+    assert live.get_portfolio("client-000418") == local.get_portfolio("client-000418")
+    assert live.client_ids("demo-bank") == local.client_ids("demo-bank")
+    assert live.client_ids("demo-bank"), "an empty book leaves the live lane nothing to brief"
 
 
 def test_live_house_view_index_does_not_self_seed_fiction() -> None:
+    """The EVIDENCE half of the rule, and the one that would forge a citation if it broke."""
     adapter = LocalFtsHouseViewAdapter(_settings("live"))
     assert adapter.retrieve("cash equity outlook", top_k=5) == []
+    seeded = LocalFtsHouseViewAdapter(_settings("local"))
+    assert seeded.retrieve("cash equity outlook", top_k=5), "local must still ground offline"
 
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +112,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("CIO_PROFILE", "local")
     monkeypatch.setenv("CIO_LOCAL_DB", ":memory:")
     monkeypatch.setenv("CIO_LOCAL_AUDIT", ":memory:")
+    monkeypatch.setenv("CIO_LOCAL_BOOK", ":memory:")
     deps.get_container.cache_clear()
     try:
         with TestClient(app, client=("127.0.0.1", 50000)) as test_client:

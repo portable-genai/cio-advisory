@@ -86,7 +86,8 @@ make lint
 make eval        # the `model-quality-gate`-style offline promotion gate
 
 # Build a real, cited, suitability-tagged briefing offline. The house-view corpus and a
-# couple of synthetic clients are seeded automatically; client-000042 is a balanced client.
+# the shipped fictional client book seeds automatically; client-000042 is a balanced client
+# whose portfolio is short of its risk profile's equity target.
 CIO_PROFILE=local cio-advisory briefing client-000042
 ```
 

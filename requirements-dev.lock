@@ -53,6 +53,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   typer
 coverage==7.15.4
     # via pytest-cov
+duckdb==1.5.5
+    # via cio-advisory (pyproject.toml)
 fastapi==0.141.1
     # via cio-advisory (pyproject.toml)
 h11==0.16.0
@@ -141,7 +143,7 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-ruff==0.16.3
+ruff==0.16.5
     # via cio-advisory (pyproject.toml)
 shellingham==1.5.4
     # via typer

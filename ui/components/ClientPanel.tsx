@@ -6,11 +6,17 @@ import { useEffect, useRef, useState } from "react";
 import { CLIENT_TEMPLATE_URL, listClients, registerClient } from "@/lib/api";
 import { Pill } from "./ui";
 
+// The clients the shipped demo book serves, all fictional and all opaque ids.
+// tests/contract/test_demo_book.py fails the build when this list names one the server does
+// not have: it used to offer client-000113 and client-000201 against a two-client seed, so
+// picking either errored in front of whoever was watching.
 const SAMPLE_CLIENTS = [
   { id: "client-000042", label: "Balanced, growth + income" },
-  { id: "client-000077", label: "Conservative, preservation" },
-  { id: "client-000113", label: "Aggressive, growth" },
+  { id: "client-000077", label: "Conservative, preservation, ESG-only" },
+  { id: "client-000113", label: "Aggressive, professional" },
   { id: "client-000201", label: "Balanced, ESG-only" },
+  { id: "client-000305", label: "Conservative, income, HK" },
+  { id: "client-000418", label: "Aggressive, growth" },
 ];
 
 export function ClientPanel({

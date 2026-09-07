@@ -59,7 +59,7 @@ def _settings() -> Settings:
     """Settings whose local stores are ephemeral in-memory SQLite (deterministic)."""
     return Settings(
         profile="local",
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
     )
 
 

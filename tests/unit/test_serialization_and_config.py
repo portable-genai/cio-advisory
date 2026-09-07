@@ -178,7 +178,7 @@ def test_composition_root_threads_suitability_override(monkeypatch):
         Settings.load(CONFIG_PATH),
         profile="local",
         profile_explicit=True,
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
         suitability=SuitabilitySettings(concentration_limit=0.17),
     )
     service = build_advisory_service(Container(settings))

@@ -72,7 +72,7 @@ def _settings(profile: str) -> Settings:
         logging=base.logging,
         agent_engine=base.agent_engine,
         suitability=base.suitability,
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
         adapters=base.adapters,
     )
 

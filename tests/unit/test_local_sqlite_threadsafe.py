@@ -35,7 +35,7 @@ _PER_WORKER = 25
 def _settings() -> Settings:
     return Settings(
         profile="local",
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
     )
 
 
