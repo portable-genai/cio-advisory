@@ -46,9 +46,45 @@ review), never a 500. A missing portfolio or empty house-view result returns a 2
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
 | `RetrievalEmptyError` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed in `enterprise-knowledge-base`. |
-| `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the portfolio/profile tables are populated. |
+| `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the book is loaded (`make load-demo-book`). A client loaded under a different tenant reads as absent by design: the entitlement gate fails closed. |
 | Briefing has fewer points than house views | UNSUITABLE points were dropped | Expected: unsuitable themes are never presented. Review the audit metadata `n_review_or_unsuitable`. |
 | Eval gate fails on `no_advice_safety` | Output read as advice or missing disclaimer | A prompt or post-processing change leaked directive phrasing. Revert and re-run `python eval/run_eval.py`. |
+
+## Loading the client book
+
+The `gcp` and `platform` profiles read client profiles, holdings, instruments and model
+portfolios from the `wealth_portfolio` BigQuery dataset. Terraform creates those tables and
+leaves them empty; `scripts/load_demo_book.py` fills them with the shipped fictional book,
+which is the same book the laptop serves from DuckDB.
+
+```bash
+make demo-book-dry-run TENANT=<hosted-domain>          # writes build/demo-book/*.ndjson, loads nothing
+make load-demo-book PROJECT=<id> TENANT=<hosted-domain>
+```
+
+Three things decide whether this works.
+
+**The tenant is not optional and `demo-bank` is not it.** Every client row carries the
+tenant that owns it, and the entitlement gate compares that to the tenant the identity
+adapter resolved from the IAP assertion, which on a deployment is the hosted domain. Rows
+loaded under any other value are invisible to every real user, and they read exactly like an
+empty dataset. Pass the deployment's hosted domain. The shipped `client-000999` is loaded
+under `<tenant>-other` instead, on purpose: it is the row that proves a user cannot reach
+another tenant's client, and folding it in would delete that evidence.
+
+**The loader truncates, so it refuses a book it did not write.** It proceeds only when the
+target tables are empty or `book_manifest` says what they hold is fictional. Point it at a
+real client book and it stops with the row counts it found.
+
+**Terraform runs first.** The loader fills tables, it never creates them, and it says so
+rather than half-loading. Changing a REQUIRED column on a `deletion_protection` table is a
+replace, so apply the schema before there is anything in it worth keeping.
+
+Verify with a briefing that exercises the join and the tenant:
+
+```bash
+CIO_PROFILE=gcp cio-advisory briefing client-000418
+```
 
 ## Audit and observability
 

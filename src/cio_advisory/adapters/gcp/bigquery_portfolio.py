@@ -19,6 +19,25 @@ from ...domain._grounded import coerce_asset_class
 from ...domain.errors import PortfolioUnavailableError
 from ...domain.models import ClientProfile, Holding, Portfolio, RiskAppetite
 
+#: The columns this adapter selects, per settings key for the table it selects them from.
+#: Declared rather than only spelled inside the SQL so a contract test can hold them against
+#: the columns ``infra/terraform/bigquery.tf`` declares. That test exists because this
+#: adapter selected a ``tenant`` column the schema did not have: the managed profile would
+#: have failed on its first profile read, and nothing offline could see it.
+SELECTED_COLUMNS: dict[str, tuple[str, ...]] = {
+    "portfolio_table": ("client_id", "instrument_id", "value", "weight", "currency", "line_no"),
+    "profile_table": (
+        "client_id",
+        "risk_appetite",
+        "objectives",
+        "knowledge_experience",
+        "constraints",
+        "jurisdiction",
+        "tenant",
+    ),
+    "instruments_table": ("instrument_id", "name", "asset_class"),
+}
+
 
 class BigQueryPortfolioAdapter:
     """Load portfolios and client profiles from BigQuery (in-region, CMEK)."""
@@ -41,21 +60,29 @@ class BigQueryPortfolioAdapter:
         return f"{self._settings.project_id}.{self._bq.dataset}.{table}"
 
     def get_portfolio(self, client_id: str) -> Portfolio:
-        """Return the client's holdings from the portfolio table."""
+        """Return the client's holdings, joined to the instrument reference table.
+
+        A holding names an instrument by id and the instrument row owns its display name and
+        asset class, so the same instrument cannot be described two ways in two clients'
+        books. Statement-line order is the client's own, which is the order an RM reads.
+        """
         client = self._get_client()
         rows = self._query(
             client,
-            f"SELECT instrument, asset_class, value, weight, currency "
-            f"FROM `{self._table(self._bq.portfolio_table)}` WHERE client_id = @client_id",
+            f"SELECT i.name AS name, i.asset_class AS asset_class, h.value AS value, "
+            f"h.weight AS weight, h.currency AS currency "
+            f"FROM `{self._table(self._bq.portfolio_table)}` AS h "
+            f"JOIN `{self._table(self._bq.instruments_table)}` AS i USING (instrument_id) "
+            f"WHERE h.client_id = @client_id ORDER BY h.line_no",
             client_id,
         )
         holdings = tuple(
             Holding(
-                instrument=str(r["instrument"]),
+                instrument=str(r["name"]),
                 asset_class=coerce_asset_class(r["asset_class"]),
                 value=float(r["value"]),
                 weight=float(r["weight"]),
-                currency=str(r.get("currency", "USD")),
+                currency=str(r.get("currency") or "USD"),
             )
             for r in rows
         )

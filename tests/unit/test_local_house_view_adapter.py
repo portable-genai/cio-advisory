@@ -22,7 +22,7 @@ from cio_advisory.domain.models import AssetClass
 def _adapter(seed: bool = True) -> LocalFtsHouseViewAdapter:
     settings = Settings(
         profile="local",
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
     )
     adapter = LocalFtsHouseViewAdapter(settings)
     if seed:

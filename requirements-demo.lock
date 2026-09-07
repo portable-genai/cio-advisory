@@ -44,6 +44,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     # via
     #   click
     #   typer
+duckdb==1.5.5
+    # via cio-advisory (pyproject.toml)
 fastapi==0.141.1
     # via cio-advisory (pyproject.toml)
 greenlet==3.5.5

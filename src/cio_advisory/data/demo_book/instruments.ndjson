@@ -1,0 +1,15 @@
+{"instrument_id": "DEMO-EQ-GLB", "name": "Global Equity Fund", "asset_class": "equity", "sub_class": "developed-equity", "region": "global", "theme_tags": [], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-EQ-TECH", "name": "US Mega-cap Technology ETF", "asset_class": "equity", "sub_class": "sector-equity", "region": "us", "theme_tags": ["megacap-tech", "ai-infrastructure"], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-EQ-ESG", "name": "ESG Global Equity Fund", "asset_class": "equity", "sub_class": "developed-equity", "region": "global", "theme_tags": ["esg"], "esg": true, "liquidity": "daily"}
+{"instrument_id": "DEMO-EQ-DIV", "name": "Dividend Equity Fund", "asset_class": "equity", "sub_class": "income-equity", "region": "global", "theme_tags": [], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-EQ-APAC", "name": "Asia ex-Japan Equity Fund", "asset_class": "equity", "sub_class": "em-equity", "region": "apac", "theme_tags": ["apac-equity"], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-FI-IG", "name": "IG Bond Fund", "asset_class": "fixed_income", "sub_class": "ig-credit", "region": "global", "theme_tags": ["ig-credit"], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-FI-SD", "name": "Short-Duration Bond Fund", "asset_class": "fixed_income", "sub_class": "short-duration", "region": "global", "theme_tags": [], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-FI-LD", "name": "Long-Duration Sovereign Bond Fund", "asset_class": "fixed_income", "sub_class": "sovereign", "region": "global", "theme_tags": ["long-duration"], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-FI-GRN", "name": "Green Bond Fund", "asset_class": "fixed_income", "sub_class": "green-bonds", "region": "global", "theme_tags": ["green-bonds", "esg"], "esg": true, "liquidity": "daily"}
+{"instrument_id": "DEMO-FI-HY", "name": "High-Yield Bond Fund", "asset_class": "fixed_income", "sub_class": "high-yield", "region": "global", "theme_tags": [], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-CASH", "name": "Cash Reserve", "asset_class": "cash", "sub_class": "deposit", "region": "sg", "theme_tags": ["cash"], "esg": null, "liquidity": "daily"}
+{"instrument_id": "DEMO-ALT-PE", "name": "Private Equity Fund", "asset_class": "alternatives", "sub_class": "private-equity", "region": "global", "theme_tags": ["private-markets"], "esg": false, "liquidity": "locked"}
+{"instrument_id": "DEMO-ALT-PC", "name": "Private Credit Fund", "asset_class": "alternatives", "sub_class": "private-credit", "region": "global", "theme_tags": ["private-markets"], "esg": false, "liquidity": "locked"}
+{"instrument_id": "DEMO-RA-REIT", "name": "Listed REIT Fund", "asset_class": "real_assets", "sub_class": "listed-reits", "region": "apac", "theme_tags": ["listed-reits", "cre"], "esg": false, "liquidity": "daily"}
+{"instrument_id": "DEMO-RA-INFRA", "name": "Sustainable Infrastructure Fund", "asset_class": "real_assets", "sub_class": "infrastructure", "region": "global", "theme_tags": ["esg", "infrastructure"], "esg": true, "liquidity": "monthly"}

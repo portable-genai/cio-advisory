@@ -30,11 +30,21 @@ verdict and citations, for the RM to weigh and sign off.
 | Profile | Backend per port | Notes |
 |---|---|---|
 | `gcp` | Managed Gemini Enterprise Agent Platform (lazy SDK) | Production default |
-| `local` | House views: SQLite FTS5 (BM25). LLM: deterministic schema-driven. Guardrail: heuristic. DLP: regex. Audit: append-only SQLite WORM stand-in. Tracer: no-op. Sessions / memory / registry: in-process. Portfolio: in-process synthetic. Grounding: disabled. Eval: in-repo offline gate. | SDK-free, no API key, no emulator. Self-seeds a synthetic corpus. |
+| `local` | House views: SQLite FTS5 (BM25). LLM: deterministic schema-driven. Guardrail: heuristic. DLP: regex. Audit: append-only SQLite WORM stand-in. Tracer: no-op. Sessions / memory / registry: in-process. Portfolio: **DuckDB, the same five tables the managed dataset holds**. Grounding: disabled. Eval: in-repo offline gate. | SDK-free, no API key, no emulator. Self-seeds the shipped fictional book. |
 | `platform` | HTTP clients to `agent-guardrail-gateway` / `enterprise-knowledge-base` / `agent-registry` / `model-quality-gate` / `agent-observability` | Inside the full platform |
 | `onprem` | Placeholders that raise `NotImplementedError` | Fail-fast migration target |
 
-  The `local` profile is SDK-free and emulator-free by default; for higher fidelity it
+  **The client book.** The fictional clients, their holdings, the instruments they hold and
+the model portfolio per risk profile ship as NDJSON under
+`src/cio_advisory/data/demo_book/`, one file per BigQuery table and in that table's column
+order. The DuckDB store the laptop reads and the BigQuery dataset the deployment reads are
+filled from those same files, so the two surfaces are about one book rather than two that
+resemble each other. `tests/contract/test_demo_book.py` holds the book's own invariants, the
+console's client picker and the managed adapter's selected columns against the Terraform
+schema; that last check exists because the adapter selected a `tenant` column the schema
+never declared, which no offline test could see.
+
+The `local` profile is SDK-free and emulator-free by default; for higher fidelity it
   routes the in-process stores (sessions / memory / registry) to Google's official Firestore
   emulator when `FIRESTORE_EMULATOR_HOST` is set AND the `[gcp]` extra is installed (the
   google client is imported lazily, only on that branch). There is no emulator for File
@@ -51,7 +61,7 @@ verdict and citations, for the RM to weigh and sign off.
 | Concern | Managed service |
 |---|---|
 | House-view retrieval | Governed `enterprise-knowledge-base` (`/v1/search`); standalone: Agent Search / File Search |
-| Portfolio + profile | BigQuery (internal data, CMEK, in-region) |
+| Portfolio + profile + instruments + model portfolios | BigQuery `wealth_portfolio` (internal data, CMEK, in-region), filled by `scripts/load_demo_book.py` |
 | Reasoning / triage | Gemini on the Gemini Enterprise Agent Platform |
 | Guardrail | Model Armor (`sanitizeUserPrompt` / `sanitizeModelResponse`) |
 | PII redaction | Sensitive Data Protection / DLP (`deidentifyContent`) |

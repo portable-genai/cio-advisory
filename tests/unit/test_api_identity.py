@@ -32,7 +32,7 @@ _DEFAULT_SUBJECT = "demo.analyst@bank.example"  # first seeded persona = local d
 def _settings() -> Settings:
     return Settings(
         profile="local",
-        local=LocalSettings(db_path=":memory:", audit_path=":memory:"),
+        local=LocalSettings(db_path=":memory:", audit_path=":memory:", book_path=":memory:"),
     )
 
 
@@ -42,6 +42,7 @@ def api(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("CIO_PROFILE", "local")
     monkeypatch.setenv("CIO_LOCAL_DB", ":memory:")
     monkeypatch.setenv("CIO_LOCAL_AUDIT", ":memory:")
+    monkeypatch.setenv("CIO_LOCAL_BOOK", ":memory:")
     deps.get_container.cache_clear()
 
     settings = _settings()
@@ -89,6 +90,7 @@ def test_an_unconsented_run_refuses_the_seeded_personas(monkeypatch: pytest.Monk
     monkeypatch.delenv("CIO_PROFILE", raising=False)
     monkeypatch.setenv("CIO_LOCAL_DB", ":memory:")
     monkeypatch.setenv("CIO_LOCAL_AUDIT", ":memory:")
+    monkeypatch.setenv("CIO_LOCAL_BOOK", ":memory:")
     deps.get_container.cache_clear()
     try:
         client = TestClient(app, client=("127.0.0.1", 50000))

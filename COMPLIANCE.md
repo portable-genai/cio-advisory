@@ -48,7 +48,10 @@ This is the control that matters most for `cio-advisory`.
   and is the most heavily unit-tested module.
 - **Maker-checker.** Every briefing requires human review (P-06); the RM signs off any
   advice to the client.
-- **Synthetic data only.** The shipped client/portfolio data is fictional. Loading live
+- **Synthetic data only, and the loader enforces it in one direction.** The shipped
+  client/portfolio book is fictional and says so in its own manifest;
+  `scripts/load_demo_book.py` refuses to truncate a dataset whose manifest does not,
+  so the demo loader can never overwrite a real client book. Loading live
   client data requires sign-off; the portfolio store is internal, CMEK-encrypted, and
   inside the residency perimeter.
 
