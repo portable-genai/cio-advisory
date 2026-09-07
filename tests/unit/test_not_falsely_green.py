@@ -24,6 +24,7 @@ from eval.run_eval import (
     brief_example,
     load_golden,
     score_citation_accuracy,
+    score_gap_coverage,
     score_groundedness,
     score_no_advice_safety,
     score_pii_safety,
@@ -127,4 +128,39 @@ def test_pii_safety_can_go_red() -> None:
         ),
         threshold=THRESHOLDS["pii_safety"],
         metric="pii_safety",
+    )
+
+
+def test_gap_coverage_can_go_red() -> None:
+    """The red case is a briefing that stops speaking to a gap it could have closed.
+
+    Chosen on a client with an addressable gap, so the proof is not vacuous: dropping every
+    point that addresses one is precisely the regression this metric exists to catch, and it
+    is invisible to every other metric here. A briefing whose remaining points are still
+    grounded, still cited, still correctly suitability-tagged and still free of advice scores
+    a clean sheet everywhere else while no longer being about this client's portfolio.
+    """
+    example = next(e for e in _GOLDEN if _has_addressable_gap(e))
+    produced, _ = _brief(example)
+    addressing = [
+        p for p in produced.talking_points if p.alignment is not None and p.alignment.addresses
+    ]
+    assert addressing, "the proof needs a briefing that closes at least one gap"
+    assert_can_go_red(
+        lambda b: score_gap_coverage(b, example),
+        green=produced,
+        red=replace(
+            produced,
+            talking_points=tuple(p for p in produced.talking_points if p not in addressing),
+        ),  # every gap-filling point quietly gone
+        threshold=THRESHOLDS["gap_coverage"],
+        metric="gap_coverage",
+    )
+
+
+def _has_addressable_gap(example: GoldenExample) -> bool:
+    produced, _ = _brief(example)
+    return any(
+        p.alignment is not None and p.alignment.addresses is not None
+        for p in produced.talking_points
     )

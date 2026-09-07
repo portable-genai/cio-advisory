@@ -118,13 +118,21 @@ class AssetClass(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Holding:
-    """A single position in the client's portfolio."""
+    """A single position in the client's portfolio.
 
-    instrument: str  # display name / identifier of the instrument
+    ``tags`` are the instrument's theme tags, carried from the instrument reference data.
+    They are what lets a house-view theme be linked to the positions it is actually about
+    DETERMINISTICALLY, instead of trusting a model to say which of a client's holdings a
+    theme relates to. ``instrument_id`` is the reference key those tags came from.
+    """
+
+    instrument: str  # display name of the instrument
     asset_class: AssetClass
     value: float  # market value in ``currency``
     weight: float  # share of the portfolio in [0.0, 1.0]
     currency: str = "USD"
+    instrument_id: str = ""  # reference key, e.g. "DEMO-EQ-GLB"
+    tags: tuple[str, ...] = ()  # theme tags, e.g. ("megacap-tech", "ai-infrastructure")
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +162,27 @@ class Stance(StrEnum):
     UNDERWEIGHT = "underweight"
 
 
+class ThemeSignal(StrEnum):
+    """What a house view is to a portfolio: something to add, or something to watch out for.
+
+    DERIVED from the stance rather than stored beside it, so the two can never disagree.
+    An overweight stance is an opportunity, an underweight stance is a threat, and a neutral
+    stance is a watch item. A briefing reads the report as opportunities and threats, which
+    is the vocabulary a relationship manager and a client already share.
+    """
+
+    OPPORTUNITY = "opportunity"
+    THREAT = "threat"
+    WATCH = "watch"
+
+
+_SIGNAL_BY_STANCE: dict[Stance, ThemeSignal] = {
+    Stance.OVERWEIGHT: ThemeSignal.OPPORTUNITY,
+    Stance.UNDERWEIGHT: ThemeSignal.THREAT,
+    Stance.NEUTRAL: ThemeSignal.WATCH,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class HouseView:
     """One CIO house-view theme retrieved from the governed knowledge base (A2)."""
@@ -164,6 +193,12 @@ class HouseView:
     asset_class: AssetClass
     rationale: str = ""
     citation: Citation | None = None  # provenance back to the source CIO article
+    tags: tuple[str, ...] = ()  # theme tags matched against a holding's own
+
+    @property
+    def signal(self) -> ThemeSignal:
+        """Opportunity, threat or watch item, derived from the stance."""
+        return _SIGNAL_BY_STANCE[self.stance]
 
 
 # --------------------------------------------------------------------------- #
@@ -183,6 +218,131 @@ class MemoryItem:
     content: str
     scope: str = "user"  # "user" | "client" | "global"
     created_at: datetime = field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# The model portfolio : what a portfolio is measured AGAINST
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True, slots=True)
+class AllocationTarget:
+    """The ideal weight for one asset class, and the band around it that counts as in range.
+
+    The band is what makes a gap a fact rather than an opinion: a portfolio is short of its
+    profile only when it sits OUTSIDE the band the bank published, not merely off the target.
+    """
+
+    asset_class: AssetClass
+    target_weight: float  # the ideal share in [0.0, 1.0]
+    min_weight: float  # below this the portfolio is under-allocated
+    max_weight: float  # above this it is over-allocated
+
+
+@dataclass(frozen=True, slots=True)
+class ModelPortfolio:
+    """The bank's ideal allocation for one risk profile, as published on a date.
+
+    Data rather than configuration: a bank revises this per quarter and per booking centre,
+    and a briefing has to be able to say which edition it measured against. The
+    concentration limit stays configuration, because that is a policy number rather than a
+    market view.
+    """
+
+    model_id: str
+    risk_appetite: RiskAppetite
+    targets: tuple[AllocationTarget, ...] = ()
+    jurisdiction: str = "SG"
+    effective_from: str = ""  # ISO date the allocation took effect
+    source: str = ""  # the publication this allocation came from
+
+    def target_for(self, asset_class: AssetClass) -> AllocationTarget | None:
+        for target in self.targets:
+            if target.asset_class is asset_class:
+                return target
+        return None
+
+
+class GapStatus(StrEnum):
+    """Where one asset class sits against its band."""
+
+    UNDER = "under"
+    IN_RANGE = "in_range"
+    OVER = "over"
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationGap:
+    """One asset class, what the client holds in it, and what the model portfolio wants.
+
+    ``drift`` is signed and in weight units: negative when the portfolio is short of the
+    target, positive when it is heavy. ``value_gap`` is the same distance in money, which is
+    the number a relationship manager actually discusses.
+    """
+
+    asset_class: AssetClass
+    current_weight: float
+    target_weight: float
+    min_weight: float
+    max_weight: float
+    status: GapStatus
+    current_value: float = 0.0
+    total_value: float = 0.0
+
+    @property
+    def drift(self) -> float:
+        """Signed distance from the target, in weight units (negative means short)."""
+        return round(self.current_weight - self.target_weight, 6)
+
+    @property
+    def value_gap(self) -> float:
+        """Signed distance from the target, in the portfolio's currency."""
+        return round((self.target_weight - self.current_weight) * self.total_value, 2)
+
+
+@dataclass(frozen=True, slots=True)
+class ThemeAlignment:
+    """One CIO theme set against this portfolio: what it is about, and what it touches.
+
+    This is the row a briefing shows per theme. ``addresses`` names the under-allocated
+    asset class an opportunity would move towards its target; ``exposure`` names the class a
+    threat is already about. Both are computed, never asserted by a model.
+    """
+
+    theme: str
+    signal: ThemeSignal
+    asset_class: AssetClass
+    status: GapStatus
+    addresses: AllocationGap | None = None  # the gap this opportunity would close
+    exposure: AllocationGap | None = None  # the holding weight this threat bears on
+    related_holdings: tuple[str, ...] = ()
+    citation: Citation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioSummary:
+    """What the client holds today, beside what their risk profile says they should.
+
+    The before-picture a briefing is read against. It is deliberately available WITHOUT
+    generating anything: the gaps are arithmetic over the holdings and the model portfolio,
+    so the console can show them the moment a client is picked.
+    """
+
+    client_id: str
+    risk_appetite: RiskAppetite
+    total_value: float = 0.0
+    currency: str = "USD"
+    holdings: tuple[Holding, ...] = ()
+    allocation_gaps: tuple[AllocationGap, ...] = ()
+    model_portfolio: ModelPortfolio | None = None
+
+    def gaps_under(self) -> tuple[AllocationGap, ...]:
+        """The asset classes the portfolio is short of, worst first."""
+        under = [g for g in self.allocation_gaps if g.status is GapStatus.UNDER]
+        return tuple(sorted(under, key=lambda g: g.drift))
+
+    def gaps_over(self) -> tuple[AllocationGap, ...]:
+        """The asset classes the portfolio is heavy in, heaviest first."""
+        over = [g for g in self.allocation_gaps if g.status is GapStatus.OVER]
+        return tuple(sorted(over, key=lambda g: -g.drift))
 
 
 # --------------------------------------------------------------------------- #
@@ -255,15 +415,31 @@ class TalkingPoint:
     suitability: SuitabilityAssessment | None = None
     citations: tuple[Citation, ...] = ()
     is_advice: bool = False
+    alignment: ThemeAlignment | None = None  # the computed gap or exposure this point is about
 
 
 @dataclass(frozen=True, slots=True)
 class PortfolioAlignment:
-    """How the client's portfolio lines up with the current CIO house views."""
+    """How the client's portfolio lines up with the current CIO house views.
 
-    themes_in_line: tuple[str, ...] = ()  # themes the portfolio already reflects
-    gaps: tuple[str, ...] = ()  # overweight house views the portfolio under-holds
-    overweights: tuple[str, ...] = ()  # positions heavier than the house view supports
+    The three name lists are the summary a reader skims; ``theme_links`` carries the
+    reasoning behind each one and ``allocation_gaps`` the arithmetic behind that. A theme
+    counts as a gap when the asset class it is about sits BELOW the model portfolio's band,
+    not merely when the portfolio holds none of it: "you hold no alternatives" and "you hold
+    four points less than your profile calls for" are different statements, and only the
+    second can be closed by a number.
+
+    ``uncovered_gaps`` is the honest half. It names the asset classes this client is short
+    of that today's report says nothing about, so a briefing can decline to invent a theme
+    for them instead of quietly omitting the gap.
+    """
+
+    themes_in_line: tuple[str, ...] = ()  # themes whose asset class sits inside its band
+    gaps: tuple[str, ...] = ()  # opportunity themes addressing an under-allocated class
+    overweights: tuple[str, ...] = ()  # themes whose asset class is over its band
+    theme_links: tuple[ThemeAlignment, ...] = ()  # per theme: what it addresses, what it touches
+    allocation_gaps: tuple[AllocationGap, ...] = ()  # every asset class against its band
+    uncovered_gaps: tuple[str, ...] = ()  # under-allocated classes no theme addresses
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,6 +453,8 @@ class AdvisoryBriefing:
     client_id: str
     talking_points: tuple[TalkingPoint, ...] = ()
     alignment: PortfolioAlignment = field(default_factory=PortfolioAlignment)
+    portfolio_summary: PortfolioSummary | None = None
+    house_views_considered: tuple[HouseView, ...] = ()
     not_advice_disclaimer: str = NOT_ADVICE_DISCLAIMER
     requires_human_review: bool = True
     generated_at: datetime = field(default_factory=utcnow)

@@ -103,6 +103,17 @@ GCP SDK.
 3. **SuitabilityAssessment**: per theme, a verdict (SUITABLE | REVIEW | UNSUITABLE) against
    the client's risk profile, objectives, knowledge/experience and concentration, with
    factors + rationale + citations. UNSUITABLE points are dropped, never recommended.
+4. **PortfolioSummary**: what the client holds against what their risk profile calls for.
+   Every asset class the **ModelPortfolio** names, its current weight, its target and band,
+   and an **AllocationGap** carrying the signed drift in weight and in money. Computed
+   arithmetic, available without generating anything, so a console can show the
+   before-picture the moment a client is picked.
+5. **ThemeAlignment**: one CIO theme set against this portfolio. Its **ThemeSignal**
+   (opportunity, threat or watch) is DERIVED from the stance so the two cannot disagree;
+   `addresses` names the under-allocated class an opportunity would move towards target and
+   `exposure` the class a threat bears on; `related_holdings` are matched by the instrument's
+   theme tags, falling back to the asset class. Every talking point carries the alignment
+   for its theme, so "this closes your equity gap" is arithmetic rather than a claim.
 
 ### Services & policies
 
@@ -113,7 +124,16 @@ GCP SDK.
   knowledge factors wins. AGGRESSIVE-only themes are REVIEW for BALANCED and UNSUITABLE for
   CONSERVATIVE clients; hard-excluded asset classes are UNSUITABLE; a concentration breach
   forces REVIEW.
-- `TalkingPointsService` : synthesise points (LLM) + attach suitability; drop UNSUITABLE.
+- `gap_analysis` : pure arithmetic and pure matching. `allocation_gaps` measures each asset
+  class against the model portfolio's published band; `align_theme` says what a theme closes
+  or bears on; `rank_by_relevance` orders the day's themes by what they mean for this
+  portfolio; `uncovered` names the under-allocated classes today's report is silent on, so a
+  briefing declines to invent a theme rather than omitting the gap. **A gap is a distance
+  from a published target, not the absence of an asset class**: the previous alignment asked
+  only whether a class was present, so a client one point short and a client holding none
+  read identically and a client at twice their target read as in line.
+- `TalkingPointsService` : synthesise points (LLM) + attach suitability and the computed
+  alignment; drop UNSUITABLE; filter named holdings to ones the client owns.
 - `CioReviewPolicy` : a briefing always requires review; any REVIEW/UNSUITABLE point
   escalates the audit decision.
 
@@ -122,11 +142,14 @@ GCP SDK.
 ```
 redaction.redact(inputs)
   -> guardrail.screen(INPUT)            [blocked -> audit BLOCKED + raise]
-  -> portfolio.get_profile + get_portfolio
+  -> portfolio.get_profile + get_portfolio + get_model_portfolio [None => no gaps]
+  -> gap_analysis.summarise (allocation gaps: arithmetic, no model call)
   -> house_view.retrieve (`enterprise-knowledge-base`)           [empty -> RetrievalEmptyError]
-  -> llm synthesise TalkingPoint[]
+  -> gap_analysis.rank_by_relevance (order, never filter)
+  -> llm synthesise TalkingPoint[]  [model portfolio + gaps in the prompt context]
   -> SuitabilityPolicy.assess per point (drop/flag UNSUITABLE)
-  -> compute PortfolioAlignment
+  -> attach the computed ThemeAlignment; drop holdings the client does not own
+  -> compute PortfolioAlignment (gaps, theme links, uncovered gaps)
   -> attach not-advice disclaimer
   -> guardrail.screen(OUTPUT)           [blocked -> audit BLOCKED + raise]
   -> CioReviewPolicy (always requires review; escalate on REVIEW/UNSUITABLE)
@@ -154,6 +177,11 @@ IAP-injected assertion. See docs/embedding-and-identity.md.
 
 ### Sibling services `cio-advisory` CONSUMES
 
+`PortfolioPort` additionally serves `get_model_portfolio(risk_appetite, jurisdiction)`, which
+returns the bank's published allocation or `None`. It stays on this port rather than a new one
+because an institution's strategic asset allocation is its own internal data, with no platform
+hop, exactly like the holdings beside it.
+
 - **`agent-guardrail-gateway`** (`GUARDRAIL_GATEWAY_URL`, default `:8080`): `POST /v1/guardrail/screen`,
   `POST /v1/redact`.
 - **`enterprise-knowledge-base`** (`KNOWLEDGE_BASE_URL`, default `:8082`): `POST /v1/search` (house-view RAG).
@@ -179,6 +207,17 @@ expected_suitability_verdicts}`, driving the real `AdvisoryService`. Metrics and
 | `suitability_accuracy` | 0.85 | verdict matches the client's profile |
 | `citation_accuracy` | 0.90 | cited sources were actually retrieved |
 | `no_advice_safety` | 0.99 | output never phrased as advice, disclaimer present |
+| `pii_safety` | 0.99 | no identifier survives redaction into the briefing or the audit |
+| `gap_coverage` | 0.90 | of the gaps a correct briefing should close for this client, how many it speaks to |
+
+The golden set is **rendered** from the shipped book by `scripts/render_golden.py`, so the
+gate measures the clients the demo shows; `make eval` fails when the committed file is stale.
+The expectations in `eval/expectations.json` are hand-written and are never derived from the
+book: an oracle computed from the code under test agrees with it by construction. Writing it
+by hand immediately found two verdicts the author had got wrong, which is the argument for
+the separation in one line. `gap_coverage`'s denominator is hand-written for the same reason,
+after the first version derived it from the briefing's own points and scored a clean 1.0 on a
+briefing that closed no gaps at all.
 
 ## 8. Non-goals
 

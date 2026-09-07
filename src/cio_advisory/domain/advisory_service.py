@@ -29,6 +29,7 @@ from contextlib import nullcontext
 from typing import Any
 
 from . import _grounded as g
+from . import gap_analysis as ga
 from .entitlements import assert_may_access_client
 from .errors import GuardrailBlockedError, PortfolioUnavailableError, RetrievalEmptyError
 from .identity import Principal
@@ -40,14 +41,17 @@ from .models import (
     ClientProfile,
     Decision,
     Direction,
+    GapStatus,
     GuardrailVerdict,
     HouseView,
+    ModelPortfolio,
     Portfolio,
     PortfolioAlignment,
+    PortfolioSummary,
     RedactionResult,
-    Stance,
     SuitabilityVerdict,
     TalkingPoint,
+    ThemeSignal,
 )
 from .review_policy import CioReviewPolicy
 from .suitability_policy import SuitabilityPolicy
@@ -144,6 +148,12 @@ class AdvisoryService:
         assert_may_access_client(principal, profile)
         portfolio = self._load_portfolio(client_id)
 
+        #    The ideal allocation for this client's risk profile, and the arithmetic against
+        #    it. Both are optional: a bank that has published no model portfolio gets a
+        #    briefing with no allocation gaps rather than gaps against invented targets.
+        model = self._load_model_portfolio(profile)
+        summary = ga.summarise(portfolio, model, profile.risk_appetite)
+
         # 4) Retrieve CIO house views from the governed KB (A2). Empty -> hard error.
         query = self._build_query(profile, portfolio)
         house_views: list[HouseView] = g.retrieve_house_views(
@@ -153,11 +163,19 @@ class AdvisoryService:
             self._write_audit(actor, redacted_id, "", Decision.ESCALATED)
             raise RetrievalEmptyError(f"no CIO house views retrieved for client {client_id!r}")
 
-        # 5) Synthesise talking points (LLM) + attach suitability; drop UNSUITABLE.
-        points = self._talking_points.synthesise(profile, portfolio, house_views)
+        # 5) Order the themes by what each means for THIS portfolio, then synthesise talking
+        #    points (LLM) + attach suitability; drop UNSUITABLE. Ordering, never filtering:
+        #    a briefing should open with the theme that closes this client's largest gap, and
+        #    an RM should still see the whole house view rather than a version of the report
+        #    edited down for them. What the model is handed first is what it writes about
+        #    first, and that ordering is arithmetic rather than the model's judgement.
+        ranked = ga.rank_by_relevance(house_views, portfolio, summary.allocation_gaps)
+        points = self._talking_points.synthesise(profile, portfolio, ranked, summary=summary)
 
-        # 6) Compute portfolio alignment against the current house views.
-        alignment = self._alignment(house_views, portfolio)
+        # 6) Compute portfolio alignment: every asset class against the model portfolio's
+        #    band, and every theme against the gap it would close or the exposure it bears
+        #    on. Arithmetic and set intersection, so a reviewer can replay it.
+        alignment = self._alignment(ranked, portfolio, summary)
 
         # 7) Output guardrail screen on the assembled briefing text (R1).
         out_text = self._briefing_text(points, alignment)
@@ -176,6 +194,8 @@ class AdvisoryService:
             client_id=client_id,
             talking_points=tuple(points),
             alignment=alignment,
+            portfolio_summary=summary,
+            house_views_considered=tuple(ranked),
             not_advice_disclaimer=NOT_ADVICE_DISCLAIMER,
             requires_human_review=requires_review,
         )
@@ -223,6 +243,25 @@ class AdvisoryService:
             raise PortfolioUnavailableError(f"no portfolio for client {client_id!r}")
         return portfolio
 
+    def _load_model_portfolio(self, profile: ClientProfile) -> ModelPortfolio | None:
+        """The published allocation for this profile, or ``None`` when there is none.
+
+        An adapter that has not implemented this yet, or a store with no row for the
+        profile, is not a reason to refuse a briefing: the briefing simply carries no
+        allocation gaps, and every consumer of them treats that as "not published" rather
+        than "no gaps". The on-prem placeholder's NotImplementedError is the one case that
+        still propagates, because that profile exists to fail loudly.
+        """
+        getter = getattr(self._portfolio, "get_model_portfolio", None)
+        if getter is None:
+            return None
+        try:
+            return getter(profile.risk_appetite, profile.jurisdiction)
+        except NotImplementedError:
+            raise
+        except Exception:  # noqa: BLE001 - an unpublished allocation is not a failed briefing
+            return None
+
     # ------------------------------------------------------------------ #
     # Alignment & query
     # ------------------------------------------------------------------ #
@@ -235,27 +274,44 @@ class AdvisoryService:
             f"with objectives {objectives} holding {classes}"
         )
 
-    def _alignment(self, house_views: list[HouseView], portfolio: Portfolio) -> PortfolioAlignment:
-        """Roll up which house-view themes the portfolio reflects, gaps and overweights."""
+    def _alignment(
+        self,
+        house_views: list[HouseView],
+        portfolio: Portfolio,
+        summary: PortfolioSummary,
+    ) -> PortfolioAlignment:
+        """Set every theme against the portfolio, and every asset class against its band.
+
+        The three name lists keep their names and change their meaning, which is the whole
+        point of this change. A theme is a GAP when the asset class it is about sits below
+        the model portfolio's published band, not when the portfolio holds none of it; it is
+        IN LINE when that class is inside the band; and it is an OVERWEIGHT when the class
+        is above the band, or above the concentration limit, whichever bites first. The
+        concentration limit still applies on top: it is a policy ceiling, and a portfolio can
+        breach it while sitting inside a band that was published before the limit was set.
+        """
+        gaps_by_class = summary.allocation_gaps
+        limit = self._suitability.concentration_limit
+        links = tuple(ga.align_theme(hv, portfolio, gaps_by_class) for hv in house_views)
+
         in_line: list[str] = []
         gaps: list[str] = []
         overweights: list[str] = []
-        limit = self._suitability.concentration_limit
-        for hv in house_views:
-            weight = portfolio.weight_in(hv.asset_class)
-            if hv.stance is Stance.OVERWEIGHT:
-                if weight > 0:
-                    in_line.append(hv.theme)
-                else:
-                    gaps.append(hv.theme)
-                if weight >= limit:
-                    overweights.append(hv.theme)
-            elif hv.stance is Stance.UNDERWEIGHT and weight >= limit:
-                overweights.append(hv.theme)
+        for link in links:
+            weight = portfolio.weight_in(link.asset_class)
+            if link.addresses is not None:
+                gaps.append(link.theme)
+            elif link.status is GapStatus.IN_RANGE and link.signal is not ThemeSignal.THREAT:
+                in_line.append(link.theme)
+            if link.status is GapStatus.OVER or weight >= limit:
+                overweights.append(link.theme)
         return PortfolioAlignment(
             themes_in_line=tuple(dict.fromkeys(in_line)),
             gaps=tuple(dict.fromkeys(gaps)),
             overweights=tuple(dict.fromkeys(overweights)),
+            theme_links=links,
+            allocation_gaps=gaps_by_class,
+            uncovered_gaps=ga.uncovered(gaps_by_class, links),
         )
 
     @staticmethod
@@ -271,6 +327,8 @@ class AdvisoryService:
             + ", ".join(alignment.gaps)
             + "; overweights="
             + ", ".join(alignment.overweights)
+            + "; uncovered="
+            + ", ".join(alignment.uncovered_gaps)
         )
         return "\n\n".join(chunks)
 

@@ -1,8 +1,8 @@
-{"client_id": "client-000042", "instrument_id": "DEMO-EQ-GLB", "line_no": 1, "value": 350000.0, "weight": 0.35, "currency": "USD", "as_of_date": "2026-09-01"}
-{"client_id": "client-000042", "instrument_id": "DEMO-FI-IG", "line_no": 2, "value": 400000.0, "weight": 0.4, "currency": "USD", "as_of_date": "2026-09-01"}
-{"client_id": "client-000042", "instrument_id": "DEMO-CASH", "line_no": 3, "value": 250000.0, "weight": 0.25, "currency": "USD", "as_of_date": "2026-09-01"}
-{"client_id": "client-000077", "instrument_id": "DEMO-FI-SD", "line_no": 1, "value": 600000.0, "weight": 0.6, "currency": "USD", "as_of_date": "2026-09-01"}
-{"client_id": "client-000077", "instrument_id": "DEMO-CASH", "line_no": 2, "value": 400000.0, "weight": 0.4, "currency": "USD", "as_of_date": "2026-09-01"}
+{"client_id": "client-000042", "instrument_id": "DEMO-EQ-GLB", "line_no": 1, "value": 360000.0, "weight": 0.3, "currency": "USD", "as_of_date": "2026-09-01"}
+{"client_id": "client-000042", "instrument_id": "DEMO-FI-IG", "line_no": 2, "value": 420000.0, "weight": 0.35, "currency": "USD", "as_of_date": "2026-09-01"}
+{"client_id": "client-000042", "instrument_id": "DEMO-CASH", "line_no": 3, "value": 420000.0, "weight": 0.35, "currency": "USD", "as_of_date": "2026-09-01"}
+{"client_id": "client-000077", "instrument_id": "DEMO-FI-SD", "line_no": 1, "value": 480000.0, "weight": 0.6, "currency": "USD", "as_of_date": "2026-09-01"}
+{"client_id": "client-000077", "instrument_id": "DEMO-CASH", "line_no": 2, "value": 320000.0, "weight": 0.4, "currency": "USD", "as_of_date": "2026-09-01"}
 {"client_id": "client-000113", "instrument_id": "DEMO-EQ-TECH", "line_no": 1, "value": 2250000.0, "weight": 0.45, "currency": "USD", "as_of_date": "2026-09-01"}
 {"client_id": "client-000113", "instrument_id": "DEMO-EQ-GLB", "line_no": 2, "value": 1000000.0, "weight": 0.2, "currency": "USD", "as_of_date": "2026-09-01"}
 {"client_id": "client-000113", "instrument_id": "DEMO-FI-HY", "line_no": 3, "value": 500000.0, "weight": 0.1, "currency": "USD", "as_of_date": "2026-09-01"}

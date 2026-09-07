@@ -1,0 +1,174 @@
+{
+  "_comment": [
+    "The oracle: what a correct briefing looks like for each client in the shipped book.",
+    "HAND-WRITTEN, and it has to stay that way. The inputs to the gate (profiles, holdings,",
+    "house views) are rendered from the book by scripts/render_golden.py, but if these",
+    "expectations were computed from the book too then the gate would be asking the code",
+    "under test whether it agrees with itself, and every metric would read 1.000 forever.",
+    "Each verdict below was worked out by hand from the suitability policy's four factors;",
+    "each expected gap was worked out from the client's weights against the model portfolio.",
+    "When a value here disagrees with the engine, exactly one of the two is wrong and the",
+    "point of the gate is that somebody has to decide which.",
+    "expected_addressed_gaps is the denominator of gap_coverage and is deliberately NOT derived from the briefing: a denominator computed from the points a briefing happens to contain shrinks when a point is deleted, which is how the first version of that metric scored 1.0 on a briefing that closed no gaps at all."
+  ],
+  "clients": {
+    "client-000042": {
+      "id": "balanced-growth-income",
+      "why": "Balanced, informed, no constraints. Short of equity (30 vs a 35 to 55 band) and of alternatives and real assets; heavy in cash.",
+      "pii_in_inputs": true,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "review",
+        "Quality investment-grade credit": "suitable",
+        "Selective private markets": "review",
+        "ESG green transition bonds": "suitable",
+        "Reduce excess cash": "suitable",
+        "Long-duration sovereigns under rate volatility": "suitable",
+        "Commercial real estate refinancing wall": "suitable",
+        "Concentration in mega-cap technology": "suitable"
+      },
+      "expected_allocation_gaps": [
+        "equity",
+        "alternatives",
+        "real_assets"
+      ],
+      "expected_threat_exposures": [
+        "cash",
+        "fixed_income"
+      ],
+      "expected_addressed_gaps": [
+        "equity",
+        "alternatives"
+      ],
+      "why_addressed": "AI infrastructure (review) closes the equity gap and private markets (review) the alternatives gap; the report offers nothing for real assets."
+    },
+    "client-000077": {
+      "id": "conservative-preservation",
+      "why": "Conservative, retail, ESG-only and no-illiquid. Aggressive overweights are unsuitable and dropped; fixed income sits at the concentration limit. The real-estate threat is dropped rather than flagged: the no-illiquid exclusion covers real assets, so the theme is not actionable for this client at all.",
+      "pii_in_inputs": false,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "unsuitable",
+        "Quality investment-grade credit": "review",
+        "Selective private markets": "unsuitable",
+        "ESG green transition bonds": "review",
+        "Reduce excess cash": "review",
+        "Long-duration sovereigns under rate volatility": "review",
+        "Commercial real estate refinancing wall": "unsuitable",
+        "Concentration in mega-cap technology": "review"
+      },
+      "expected_allocation_gaps": [
+        "equity",
+        "alternatives",
+        "real_assets"
+      ],
+      "expected_threat_exposures": [
+        "cash",
+        "fixed_income"
+      ],
+      "expected_addressed_gaps": [],
+      "why_addressed": "Both opportunities for this client's gaps are unsuitable and dropped, so a correct briefing closes none of them. Scoring otherwise would reward showing a conservative, ESG-only client an aggressive overweight."
+    },
+    "client-000113": {
+      "id": "aggressive-growth",
+      "why": "Aggressive, professional. Every class in range except real assets; equity at 65 percent is above the concentration limit, so equity themes flag review. Private markets is suitable, not review: alternatives sit at 20 percent, well under the 40 percent concentration limit, and a professional client clears the knowledge factor.",
+      "pii_in_inputs": false,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "review",
+        "Quality investment-grade credit": "suitable",
+        "Selective private markets": "suitable",
+        "ESG green transition bonds": "suitable",
+        "Reduce excess cash": "suitable",
+        "Long-duration sovereigns under rate volatility": "suitable",
+        "Commercial real estate refinancing wall": "suitable",
+        "Concentration in mega-cap technology": "suitable"
+      },
+      "expected_allocation_gaps": [
+        "real_assets"
+      ],
+      "expected_threat_exposures": [
+        "equity"
+      ],
+      "expected_addressed_gaps": [],
+      "why_addressed": "The only gap is real assets and the report offers no opportunity for it."
+    },
+    "client-000201": {
+      "id": "balanced-esg-only",
+      "why": "Balanced, ESG-only. The ESG bond theme is the one opportunity that carries ESG in its name, so it is the only one the constraint check leaves clean.",
+      "pii_in_inputs": true,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "review",
+        "Quality investment-grade credit": "review",
+        "Selective private markets": "review",
+        "ESG green transition bonds": "suitable",
+        "Reduce excess cash": "review",
+        "Long-duration sovereigns under rate volatility": "review",
+        "Commercial real estate refinancing wall": "review",
+        "Concentration in mega-cap technology": "review"
+      },
+      "expected_allocation_gaps": [
+        "fixed_income",
+        "alternatives"
+      ],
+      "expected_threat_exposures": [
+        "cash",
+        "equity"
+      ],
+      "expected_addressed_gaps": [
+        "fixed_income",
+        "alternatives"
+      ],
+      "why_addressed": "The two fixed-income opportunities close that gap and private markets closes alternatives."
+    },
+    "client-000305": {
+      "id": "conservative-income-hk",
+      "why": "Conservative, informed, HK booking. Fixed income at 65 percent is over its band and above the concentration limit; the two aggressive themes are dropped.",
+      "pii_in_inputs": true,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "unsuitable",
+        "Quality investment-grade credit": "review",
+        "Selective private markets": "unsuitable",
+        "ESG green transition bonds": "review",
+        "Reduce excess cash": "suitable",
+        "Long-duration sovereigns under rate volatility": "suitable",
+        "Commercial real estate refinancing wall": "suitable",
+        "Concentration in mega-cap technology": "suitable"
+      },
+      "expected_allocation_gaps": [
+        "alternatives",
+        "real_assets"
+      ],
+      "expected_threat_exposures": [
+        "fixed_income",
+        "cash"
+      ],
+      "expected_addressed_gaps": [],
+      "why_addressed": "Private markets is unsuitable for a conservative client and no opportunity covers real assets."
+    },
+    "client-000418": {
+      "id": "aggressive-real-assets-heavy",
+      "why": "Aggressive, informed. Real assets 25 percent against a 5 to 15 band, no fixed income at all, equity above the concentration limit.",
+      "pii_in_inputs": true,
+      "expected_suitability_verdicts": {
+        "AI infrastructure build-out": "review",
+        "Quality investment-grade credit": "suitable",
+        "Selective private markets": "suitable",
+        "ESG green transition bonds": "suitable",
+        "Reduce excess cash": "suitable",
+        "Long-duration sovereigns under rate volatility": "suitable",
+        "Commercial real estate refinancing wall": "suitable",
+        "Concentration in mega-cap technology": "suitable"
+      },
+      "expected_allocation_gaps": [
+        "fixed_income"
+      ],
+      "expected_threat_exposures": [
+        "real_assets",
+        "equity",
+        "cash"
+      ],
+      "expected_addressed_gaps": [
+        "fixed_income"
+      ],
+      "why_addressed": "Quality credit and the ESG bond theme both close the fixed-income gap."
+    }
+  }
+}

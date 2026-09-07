@@ -183,13 +183,65 @@ def test_empty_house_views_raises(
 # --------------------------------------------------------------------------- #
 # Portfolio alignment is computed.
 # --------------------------------------------------------------------------- #
-def test_alignment_is_computed(advisory_service):
+def test_alignment_measures_against_the_model_portfolio_not_against_zero(advisory_service):
+    """A gap is a distance from the published target, and this test used to say otherwise.
+
+    It asserted that AI infrastructure was IN LINE for client-000042 because the portfolio
+    held some equity, and that private markets was a gap because it held no alternatives.
+    Both readings came from the same defect: the old alignment asked "is this asset class
+    present" rather than "is it inside the band the bank published". The balanced client
+    holds 30 percent equity against a 45 percent target with a 35 percent floor, so equity is
+    the clearest gap this client has, and the theme that speaks to it is now reported as one.
+    """
     briefing = advisory_service.brief(BALANCED, PRINCIPAL)
     alignment = briefing.alignment
-    # The balanced portfolio holds equity and fixed income, both OVERWEIGHT house views,
-    # so those themes are in-line; it holds no alternatives, so private markets is a gap.
-    assert "AI infrastructure build-out" in alignment.themes_in_line
+
+    assert "AI infrastructure build-out" in alignment.gaps
+    assert "AI infrastructure build-out" not in alignment.themes_in_line
     assert "Selective private markets" in alignment.gaps
+
+    # Quality credit sits inside its band, so it is in line: held, and not short.
+    assert "Quality investment-grade credit" in alignment.themes_in_line
+
+    # The figures behind those words, which the old alignment could not produce at all.
+    equity = next(g for g in alignment.allocation_gaps if g.asset_class.value == "equity")
+    assert equity.status.value == "under"
+    assert equity.drift == pytest.approx(-0.15)
+    assert equity.value_gap == pytest.approx(180_000, abs=1.0)
+
+    # And the honest half: a gap today's report says nothing about is named, not omitted.
+    assert "real_assets" in alignment.uncovered_gaps
+
+
+def test_a_talking_point_carries_the_computed_gap_it_addresses(advisory_service):
+    """The link from a point to a gap is arithmetic, not something the model asserted."""
+    briefing = advisory_service.brief(BALANCED, PRINCIPAL)
+    linked = [p for p in briefing.talking_points if p.alignment is not None]
+    assert linked, "every point resolved to a house view should carry its alignment"
+    addressing = [p for p in linked if p.alignment.addresses is not None]
+    assert addressing, "at least one point should address an under-allocated class"
+    for point in addressing:
+        assert point.alignment.addresses.status.value == "under"
+
+
+def test_a_point_never_names_a_holding_the_client_does_not_own(advisory_service):
+    """A model naming a fund the client does not hold is not describing this portfolio."""
+    briefing = advisory_service.brief(BALANCED, PRINCIPAL)
+    owned = {h.instrument for h in briefing.portfolio_summary.holdings}
+    for point in briefing.talking_points:
+        assert set(point.linked_holdings) <= owned, point.linked_holdings
+
+
+def test_the_briefing_carries_the_portfolio_it_is_about(advisory_service):
+    """The before-picture travels with the briefing, so a console need not ask twice."""
+    briefing = advisory_service.brief(BALANCED, PRINCIPAL)
+    summary = briefing.portfolio_summary
+    assert summary is not None
+    assert summary.client_id == BALANCED
+    assert summary.total_value == pytest.approx(1_200_000)
+    assert summary.model_portfolio is not None
+    assert summary.gaps_under(), "this client is short of something; the summary should say so"
+    assert briefing.house_views_considered, "the themes the briefing weighed are reported"
 
 
 if __name__ == "__main__":  # pragma: no cover

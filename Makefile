@@ -23,7 +23,7 @@ export CIO_PROFILE := $(PROFILE)
 .DEFAULT_GOAL := help
 .PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
         demo-browser portability ui-install ui-check run-api run-ui tf-plan clean \
-        demo-book-dry-run load-demo-book
+        demo-book-dry-run load-demo-book render-golden
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -48,9 +48,9 @@ fmt: ## Auto-format and auto-fix lint issues.
 
 lint: ## Lint (ruff), check formatting, and type-check (mypy).
 	ruff check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py scripts/load_demo_book.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py
 	ruff format --check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py scripts/load_demo_book.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py
 	mypy $(SRC)
 
 test: ## Run unit + contract tests on the local profile (no GCP SDK required).
@@ -67,7 +67,11 @@ demo: ## Offline demo: build cited briefings + write JSON + render static audit-
 demo-server: ## Live presenter-controlled demo server (offline) on :8099.
 	PYTHONPATH=src $(PYTHON) scripts/cio_demo_server.py
 
-eval: ## Run the A4 eval gate (groundedness / suitability / citations / no-advice).
+eval: ## Run the A4 eval gate (groundedness / suitability / citations / no-advice / gaps).
+	# The golden set is RENDERED from the demo book plus the hand-written oracle, so this
+	# runs first: a book edit that never reached the gate would otherwise leave the gate
+	# measuring yesterday's clients and reporting green about them.
+	$(PYTHON) scripts/render_golden.py --check
 	$(PYTHON) eval/run_eval.py
 
 portability: ## Execute the bounded offline/profile portability proof.
@@ -109,6 +113,9 @@ run-api: ## Run the FastAPI service (PROFILE=$(PROFILE)).
 
 run-ui: ## Run the React / Next.js UI (dev server).
 	cd $(UI_DIR) && npm install && npm run dev
+
+render-golden: ## Re-render the eval gate's golden set from the book and the oracle.
+	$(PYTHON) scripts/render_golden.py
 
 demo-book-dry-run: ## Write the NDJSON the loader WOULD send to BigQuery, and stop.
 	$(PYTHON) scripts/load_demo_book.py --tenant $(TENANT) --dry-run build/demo-book
