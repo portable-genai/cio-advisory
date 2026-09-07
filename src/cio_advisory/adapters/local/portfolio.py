@@ -36,7 +36,15 @@ import duckdb
 
 from ... import demo_book
 from ...config import Settings
-from ...domain.models import AssetClass, ClientProfile, Holding, Portfolio, RiskAppetite
+from ...domain.models import (
+    AllocationTarget,
+    AssetClass,
+    ClientProfile,
+    Holding,
+    ModelPortfolio,
+    Portfolio,
+    RiskAppetite,
+)
 
 #: Default on-disk location for the laptop book (overridable via settings.local.book_path).
 _DEFAULT_BOOK_PATH = Path.home() / ".cio_advisory" / "book.duckdb"
@@ -350,7 +358,8 @@ class LocalPortfolioAdapter:
 
     def get_portfolio(self, client_id: str) -> Portfolio:
         rows = self._conn.execute(
-            "SELECT i.name, i.asset_class, h.value, h.weight, h.currency "
+            "SELECT i.name, i.asset_class, h.value, h.weight, h.currency, "
+            "h.instrument_id, i.theme_tags "
             "FROM holdings h JOIN instruments i USING (instrument_id) "
             "WHERE h.client_id = ? ORDER BY h.line_no",
             [client_id],
@@ -364,12 +373,52 @@ class LocalPortfolioAdapter:
                 value=float(value),
                 weight=float(weight),
                 currency=str(currency or "USD"),
+                instrument_id=str(instrument_id),
+                tags=tuple(str(t) for t in tags or ()),
             )
-            for name, asset_class, value, weight, currency in rows
+            for name, asset_class, value, weight, currency, instrument_id, tags in rows
         )
         return Portfolio(
             client_id=client_id,
             holdings=holdings,
             total_value=sum(h.value for h in holdings),
             currency=holdings[0].currency,
+        )
+
+    def get_model_portfolio(
+        self, risk_appetite: RiskAppetite, jurisdiction: str = "SG"
+    ) -> ModelPortfolio | None:
+        """The most recent published allocation for a profile, or None if there is none.
+
+        Most recent by effective date: a bank republishes its strategic allocation and a
+        briefing must measure against the edition in force, not the first one loaded.
+        """
+        rows = self._conn.execute(
+            "SELECT model_id, asset_class, target_weight, min_weight, max_weight, "
+            "effective_from, source FROM model_portfolios "
+            "WHERE risk_appetite = ? AND (jurisdiction = ? OR jurisdiction IS NULL) "
+            "AND effective_from = ("
+            "  SELECT max(effective_from) FROM model_portfolios "
+            "  WHERE risk_appetite = ? AND (jurisdiction = ? OR jurisdiction IS NULL)"
+            ") ORDER BY asset_class",
+            [risk_appetite.value, jurisdiction, risk_appetite.value, jurisdiction],
+        ).fetchall()
+        if not rows:
+            return None
+        targets = tuple(
+            AllocationTarget(
+                asset_class=AssetClass(str(asset_class)),
+                target_weight=float(target),
+                min_weight=float(low),
+                max_weight=float(high),
+            )
+            for _, asset_class, target, low, high, _, _ in rows
+        )
+        return ModelPortfolio(
+            model_id=str(rows[0][0]),
+            risk_appetite=risk_appetite,
+            targets=targets,
+            jurisdiction=jurisdiction,
+            effective_from=str(rows[0][5]),
+            source=str(rows[0][6] or ""),
         )

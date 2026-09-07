@@ -39,6 +39,9 @@ _NOT_ADVICE_RULES = (
     "shown in the HOUSE VIEWS header; never cite a source_id that is not present.\n"
     "- Ground every talking point in a CIO house view and, where relevant, the client's "
     "holdings. Do not invent a house view, a holding, a price, or a forecast.\n"
+    "- The ALLOCATION GAPS are computed from the client's holdings and the bank's model "
+    "portfolio. Use them; never restate a gap with a different number, and never describe a "
+    "class as short or heavy when the gaps say it is in range.\n"
     "- If a house view conflicts with the client's stated risk appetite, objectives or "
     "constraints, say so plainly; the suitability check decides whether it is presented.\n"
 )
@@ -68,7 +71,13 @@ TALKING_POINTS_SYSTEM = (
 TALKING_POINTS_USER = (
     "CLIENT PROFILE:\n{profile}\n\n"
     "PORTFOLIO SUMMARY:\n{portfolio}\n\n"
+    "MODEL PORTFOLIO (the ideal allocation for this client's risk profile):\n"
+    "{model_portfolio}\n\n"
+    "ALLOCATION GAPS (computed, authoritative):\n{allocation_gaps}\n\n"
     "HOUSE VIEWS:\n{house_views}\n\n"
     "Produce personalised talking points that connect the HOUSE VIEWS to this client's "
-    "PORTFOLIO. List in used_source_ids every house-view source_id you cited."
+    "PORTFOLIO. Where a theme relates to an asset class the client is short of, say which "
+    "gap it speaks to and quote the computed figure. Where a theme is a threat, say which "
+    "of the client's holdings carries the exposure. List in used_source_ids every "
+    "house-view source_id you cited."
 )

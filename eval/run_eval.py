@@ -67,6 +67,7 @@ from cio_advisory.adapters.local.redaction import LocalRegexRedactionAdapter
 from cio_advisory.config import PiiSettings, Settings
 from cio_advisory.domain.models import (
     AdvisoryBriefing,
+    AllocationTarget,
     AssetClass,
     Citation,
     ClientProfile,
@@ -76,6 +77,7 @@ from cio_advisory.domain.models import (
     GuardrailVerdict,
     Holding,
     HouseView,
+    ModelPortfolio,
     Portfolio,
     RiskAppetite,
     SourceType,
@@ -95,6 +97,7 @@ THRESHOLDS: dict[str, float] = {
     "citation_accuracy": 0.90,
     "no_advice_safety": 0.99,
     "pii_safety": 0.99,
+    "gap_coverage": 0.90,
 }
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -169,6 +172,11 @@ class GoldenExample:
     portfolio: Portfolio
     house_views: tuple[HouseView, ...]
     expected_verdicts: dict[str, SuitabilityVerdict]  # theme -> expected verdict
+    #: The asset classes a CORRECT briefing is expected to be seen closing, hand-written in
+    #: eval/expectations.json. The denominator of gap_coverage, and independent of the
+    #: briefing on purpose: a denominator read off the briefing's own points shrinks when a
+    #: point is deleted, so the metric scored 1.0 on a briefing that closed nothing.
+    expected_addressed_gaps: tuple[str, ...] = ()
     pii_in_inputs: bool = False  # client_id carries this market's identifier (pii_safety)
 
 
@@ -193,6 +201,7 @@ def _portfolio_from(rows: list, client_id: str) -> Portfolio:
             value=float(r.get("value", 0.0)),
             weight=float(r.get("weight", 0.0)),
             currency=str(r.get("currency", "USD")),
+            tags=tuple(str(t) for t in r.get("tags") or ()),
         )
         for r in rows
     )
@@ -224,6 +233,7 @@ def _house_views_from(rows: list) -> tuple[HouseView, ...]:
                     str(r.get("asset_class", "multi_asset")), AssetClass.MULTI_ASSET
                 ),
                 rationale=str(r.get("rationale", "")),
+                tags=tuple(str(t) for t in r.get("tags") or ()),
                 citation=citation,
             )
         )
@@ -296,6 +306,9 @@ def load_golden(path: Path) -> list[GoldenExample]:
                 portfolio=_portfolio_from(obj.get("portfolio", []) or [], client_id),
                 house_views=_house_views_from(obj.get("house_views", []) or []),
                 expected_verdicts=expected,
+                expected_addressed_gaps=tuple(
+                    str(v) for v in obj.get("expected_addressed_gaps", []) or []
+                ),
                 pii_in_inputs=pii_in_inputs,
             )
         )
@@ -389,16 +402,54 @@ class FakeHouseViewAdapter:
 
 
 class FakePortfolioAdapter:
-    """Serves the golden client's profile and portfolio (PortfolioPort)."""
+    """Serves the golden client's profile, portfolio and model portfolio (PortfolioPort).
+
+    The model portfolios come from the SHIPPED book rather than being restated here: the
+    gate measures relevance against the same published allocation the runtime measures
+    against, so a change to one moves the other and cannot silently diverge.
+    """
 
     def __init__(self, by_client: dict[str, GoldenExample]) -> None:
         self._by_client = by_client
+        self._models = _shipped_model_portfolios()
 
     def get_profile(self, client_id: str) -> ClientProfile:
         return self._by_client[client_id].profile
 
     def get_portfolio(self, client_id: str) -> Portfolio:
         return self._by_client[client_id].portfolio
+
+    def get_model_portfolio(self, risk_appetite, jurisdiction: str = "SG"):
+        return self._models.get(risk_appetite)
+
+
+def _shipped_model_portfolios() -> dict[RiskAppetite, ModelPortfolio]:
+    """The book's model portfolios, keyed by risk profile."""
+    from cio_advisory import demo_book
+
+    grouped: dict[RiskAppetite, list[AllocationTarget]] = {}
+    meta: dict[RiskAppetite, tuple[str, str, str]] = {}
+    for row in demo_book.rows("model_portfolios"):
+        appetite = RiskAppetite(str(row["risk_appetite"]))
+        grouped.setdefault(appetite, []).append(
+            AllocationTarget(
+                asset_class=AssetClass(str(row["asset_class"])),
+                target_weight=float(row["target_weight"]),
+                min_weight=float(row["min_weight"]),
+                max_weight=float(row["max_weight"]),
+            )
+        )
+        meta[appetite] = (str(row["model_id"]), str(row["effective_from"]), str(row["source"]))
+    return {
+        appetite: ModelPortfolio(
+            model_id=meta[appetite][0],
+            risk_appetite=appetite,
+            targets=tuple(targets),
+            effective_from=meta[appetite][1],
+            source=meta[appetite][2],
+        )
+        for appetite, targets in grouped.items()
+    }
 
 
 class FakeLLMAdapter:
@@ -554,6 +605,37 @@ def score_suitability_accuracy(briefing: AdvisoryBriefing, example: GoldenExampl
     return round(correct / len(expected), 4)
 
 
+def score_gap_coverage(briefing: AdvisoryBriefing, example: GoldenExample) -> float:
+    """Of the gaps a correct briefing should close for this client, how many it speaks to.
+
+    The question a relationship manager actually has: the client is short of something, the
+    house view has a theme for it, did the briefing connect the two.
+
+    The denominator is ``expected_addressed_gaps``, written by hand in
+    ``eval/expectations.json`` and never derived from the briefing. That is not fussiness.
+    The first version of this metric built its denominator from the themes the briefing had
+    presented, so deleting every gap-closing point also deleted every expectation, and a
+    briefing that closed nothing scored a perfect 1.0. The falsifiability proof in
+    ``tests/unit/test_not_falsely_green.py`` is what caught it.
+
+    Two things the hand-written denominator deliberately leaves out, because counting them
+    would reward the wrong behaviour: a gap today's report says nothing about, where the
+    only way to score would be to invent a theme, and a gap whose only theme the suitability
+    engine refused for this client, where the only way to score would be to present it
+    anyway. A client for whom neither applies has an empty expectation and scores 1.0, which
+    is correct and is why three of the six golden clients cannot move this number.
+    """
+    expected = {str(name) for name in example.expected_addressed_gaps}
+    if not expected:
+        return 1.0
+    addressed = {
+        point.alignment.addresses.asset_class.value
+        for point in briefing.talking_points
+        if point.alignment is not None and point.alignment.addresses is not None
+    }
+    return round(len(expected & addressed) / len(expected), 4)
+
+
 def score_no_advice_safety(briefing: AdvisoryBriefing) -> float:
     """Output must never read as advice and must always carry the disclaimer."""
     if not briefing.not_advice_disclaimer:
@@ -646,6 +728,7 @@ def run_offline(dataset: Path, thresholds: dict[str, float]) -> EvalReport:
         agg["citation_accuracy"].scores.append(score_citation_accuracy(briefing, example))
         agg["no_advice_safety"].scores.append(score_no_advice_safety(briefing))
         agg["pii_safety"].scores.append(score_pii_safety(briefing, example, case_events))
+        agg["gap_coverage"].scores.append(score_gap_coverage(briefing, example))
 
     order = (
         "groundedness",
@@ -653,6 +736,7 @@ def run_offline(dataset: Path, thresholds: dict[str, float]) -> EvalReport:
         "citation_accuracy",
         "no_advice_safety",
         "pii_safety",
+        "gap_coverage",
     )
     results = tuple(
         EvalMetricResult(

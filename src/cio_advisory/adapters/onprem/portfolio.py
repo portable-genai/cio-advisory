@@ -11,7 +11,7 @@ store is *only* a matter of filling these bodies in : the core domain logic is u
 from __future__ import annotations
 
 from ...config import Settings
-from ...domain.models import ClientProfile, Portfolio
+from ...domain.models import ClientProfile, ModelPortfolio, Portfolio, RiskAppetite
 
 _MESSAGE = (
     "On-prem PortfolioPort adapter is a migration placeholder; implement against your "
@@ -29,4 +29,12 @@ class OnPremPortfolioAdapter:
         raise NotImplementedError(_MESSAGE)
 
     def get_profile(self, client_id: str) -> ClientProfile:
+        raise NotImplementedError(_MESSAGE)
+
+    def get_model_portfolio(
+        self, risk_appetite: RiskAppetite, jurisdiction: str = "SG"
+    ) -> ModelPortfolio:
+        # Raises rather than returning None: None is the real answer for "this bank has not
+        # published one", and a placeholder returning it would report a MISSING allocation as
+        # a deliberate absence, which is the failure this profile exists to refuse.
         raise NotImplementedError(_MESSAGE)

@@ -165,6 +165,8 @@ def portfolios() -> dict[str, Portfolio]:
                 value=float(r["value"]),
                 weight=float(r["weight"]),
                 currency=str(r.get("currency") or currencies.get(client_id, "USD")),
+                instrument_id=str(r["instrument_id"]),
+                tags=tuple(str(t) for t in instruments[r["instrument_id"]].get("theme_tags") or ()),
             )
             for r in sorted(lines, key=lambda row: int(row["line_no"]))
         )
@@ -190,6 +192,7 @@ def house_views() -> tuple[HouseView, ...]:
                 stance=Stance(str(r["stance"])),
                 asset_class=AssetClass(str(r["asset_class"])),
                 rationale=str(r.get("rationale") or ""),
+                tags=tuple(str(t) for t in r.get("tags") or ()),
                 citation=Citation(
                     source_id=source_id,
                     source_type=SourceType.HOUSE_VIEW,
