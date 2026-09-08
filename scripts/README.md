@@ -17,6 +17,8 @@ shell has a different profile set.
 | `render_cio_ui.py` | Renders that JSON into static audit-first HTML pages (one per client + an index) for screenshots. |
 | `cio_demo_server.py` | A **live, click-through** server that builds the real briefings and reveals them one step per click, rendering the audit-first UI. |
 | `cio_demo_playwright.py` | A **presenter-controlled** Playwright walkthrough of the live server: it narrates each step and waits for you to press Enter before performing it. |
+| `ingest_house_views.py` | Ingests the shipped CIO corpus into the managed search store the standalone `gcp` profile retrieves from. `--dry-run` needs nothing. |
+| `render_golden.py` | Re-renders the eval gate's golden set from the book plus the hand-written oracle. `--check` runs in `make eval`. |
 | `load_demo_book.py` | Loads the shipped fictional client book into a deployment's BigQuery dataset. The one script here that is not offline: `--dry-run` writes the NDJSON and needs nothing, a real load needs credentials and the `[gcp]` extra. See [the runbook](../docs/runbook.md). |
 
 ## Static screenshots
@@ -42,10 +44,12 @@ python scripts/cio_demo_playwright.py
 ```
 
 The walkthrough is **paced by you**: it prints what the next step will do, waits for you to
-press **Enter**, then clicks **Next** and spotlights the panel to look at. The five steps
-are: balanced client talking points (with verdicts) -> their alignment -> conservative
-client (the SAME house views, now flagged REVIEW / dropped) -> their alignment ->
-maker-checker review gate.
+press **Enter**, then clicks **Next** and spotlights the panel to look at. The eight steps
+are: the balanced client's portfolio and its gaps -> their cited talking points against
+those gaps -> theme by theme, including the gaps this report cannot close -> the
+conservative client's larger equity gap -> the theme that would close it, refused as
+UNSUITABLE -> their alignment -> the aggressive client whose threat names one of their
+funds -> the maker-checker review gate.
 
 You can also just open `http://localhost:8099` and click **Next** / **Restart** by hand -
 the server holds the real briefings, so the buttons drive the same workflow.

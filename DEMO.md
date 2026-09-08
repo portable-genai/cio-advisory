@@ -3,13 +3,21 @@
 Step-by-step scripts for demoing `cio-advisory` two ways:
 
 - **Demo A - Suitability-checked advisory briefings, fully offline** (the headline flow):
-  for two synthetic clients the assistant runs the whole pipeline - redact, guardrail,
-  retrieve the CIO house views, synthesise personalised talking points, run the
-  suitability policy per theme, drop UNSUITABLE points, compute portfolio alignment - and
-  returns briefings where every talking point carries a suitability verdict and citations
-  back to a CIO house view, under a maker-checker (human-review) gate. The headline is that
-  the SAME house views earn different verdicts for the two clients. Runs **fully offline**
-  (no cloud, no API key).
+  for three clients from the shipped book the assistant runs the whole pipeline - redact,
+  guardrail, load the portfolio and the model portfolio for the client's risk profile,
+  compute what each asset class is short of, retrieve the CIO house views, order them by
+  what they mean for this portfolio, synthesise personalised talking points, run the
+  suitability policy per theme, drop UNSUITABLE points - and returns briefings where every
+  talking point carries a suitability verdict, citations back to a CIO house view, and the
+  computed gap it closes or exposure it bears on, under a maker-checker gate.
+
+  The headline is a pair of facts shown together: the SAME house views earn different
+  verdicts for different clients, and each verdict sits beside a portfolio gap the audience
+  can check. The sharpest minute is client-000077, who is 20 points short of equity while
+  the one theme that would close that gap is dropped as UNSUITABLE for them. A gap is a
+  reason to talk, never a reason to override the suitability check.
+
+  Runs **fully offline** (no cloud, no API key).
 - **Demo B - The same briefings on the managed GCP stack**: the identical artifacts
   produced against real File Search / Gemini / Model Armor / DLP / BigQuery in
   `asia-southeast1`, shown via the REST API and the Next.js console.
@@ -23,8 +31,9 @@ Step-by-step scripts for demoing `cio-advisory` two ways:
   the research it is grounded in. The fictional sample clients and house views never
   appear under live.
 
-> The synthetic client and portfolio data in Demos A/B is **fictional** and uses opaque,
-> non-PII client ids. This is decision-support, NOT financial advice. Do not run against
+> The client book in Demos A/B is **fictional** and uses opaque, non-PII client ids. The
+> console labels it as a fictional book by version. The model portfolio it is measured
+> against is an invented "Demo Bank CIO Office" allocation, not any real institution's. This is decision-support, NOT financial advice. Do not run against
 > live client data without your own legal, security and model-risk sign-off. Demo C's
 > themes are research summaries of public commentary, not a governed in-house CIO
 > publication: every citation names its real source so a reviewer can open it.
@@ -40,7 +49,8 @@ Step-by-step scripts for demoing `cio-advisory` two ways:
 GOOGLE_CLOUD_PROJECT=<project> CIO_PROFILE=live python -m cio_advisory.api.app
 
 # 3. In the UI (:3000): download the client template, register a portfolio, Build briefing.
-#    API equivalents: GET /v1/clients/template, POST /v1/clients, POST /v1/briefing.
+#    API equivalents: GET /v1/clients/template, POST /v1/clients,
+#    GET /v1/clients/{id}/portfolio (the gaps, no model call), POST /v1/briefing.
 #    The banner at the top of every page states the runtime and the answering model.
 ```
 
@@ -108,20 +118,30 @@ python scripts/cio_demo_playwright.py
 
 You'll step through, pressing Enter each time:
 
-1. **Balanced client (client-000042)** - cited talking points on screen, each with a
-   suitability verdict pill; the amber banner says decision-support, not advice.
-2. **Portfolio alignment** - which OVERWEIGHT house views the portfolio reflects (in
-   line), under-holds (gaps), or holds at/above the concentration limit (overweights).
-3. **Conservative client (client-000077)** - the SAME house views now earn different
-   verdicts: the aggressive equity overweight is dropped as UNSUITABLE, the rest flag
-   REVIEW (ESG-only constraint, concentration, retail knowledge).
-4. **Portfolio alignment** for the conservative client - a different picture.
-5. **Maker-checker** - every briefing always requires human review (P-06); every claim is
-   cited back to a CIO house view.
+1. **The portfolio first (client-000042)** - 30 percent equity against a 45 percent target
+   with a 35 percent floor: 15 points and 180,000 dollars short, on a 1.2 million book, and
+   35 percent in cash against a 10 percent ceiling. Arithmetic, not a model's opinion.
+2. **The house view read against it** - cited talking points, each with a suitability verdict
+   pill and a chip saying which gap it closes; the amber banner says decision-support.
+3. **Theme by theme, and what the report cannot close** - this client is also short of
+   alternatives and real assets, and the briefing says today's report offers nothing for
+   them rather than inventing a theme.
+4. **A second client (client-000077)** - conservative, ESG-only, 20 points short of equity:
+   a larger gap than the first client's.
+5. **The refusal** - the theme that would close that gap is the same AI infrastructure theme,
+   and it is absent from this client's points because the policy dropped it as UNSUITABLE.
+   This is the minute to slow down on.
+6. **Theme by theme** for the conservative client, for contrast.
+7. **A third client (client-000418)** - real assets 25 percent against a 5 to 15 band, and
+   the commercial-real-estate threat names the REIT fund carrying it, matched by the
+   instrument's own tags rather than by the model guessing.
+8. **Maker-checker** - every briefing always requires human review (P-06); every claim is
+   cited and every figure beside it can be recomputed by hand.
 
-**What to point at on screen:** the not-advice banner, the suitability verdict pills
-(suitable / review / unsuitable), the citation chips on every talking point, and how the
-verdicts change between the two clients. Full options (`SLOWMO_MS`, `HEADLESS`,
+**What to point at on screen:** the portfolio panel and its bands, the not-advice banner,
+the suitability verdict pills, the citation chips, the chip on each point naming the gap it
+closes, and the theme that is visible in the report and absent from the points because the
+engine refused it. Full options (`SLOWMO_MS`, `HEADLESS`,
 `CHROME_PATH`, ...) are in [`scripts/README.md`](scripts/README.md).
 
 ### 2.2 Manual, click-through (no Playwright)
