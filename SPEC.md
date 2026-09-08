@@ -160,13 +160,24 @@ redaction.redact(inputs)
 
 All JSON field names mirror the domain dataclasses (enums as strings).
 
-- `POST /v1/briefing {client_id}` -> `AdvisoryBriefing`.
+- `POST /v1/briefing {client_id}` -> `AdvisoryBriefing`, carrying the talking points, the
+  portfolio summary with its allocation gaps, the whole report as `house_views_considered`
+  (opportunities and threats alike, not only what survived suitability), and the alignment.
 - `POST /v1/talking-points {client_id}` -> `{client_id, talking_points[],
   not_advice_disclaimer, requires_human_review}`.
 - `POST /v1/suitability {client_id, theme}` -> `SuitabilityAssessment`.
+- `GET /v1/clients/{client_id}/portfolio` -> `PortfolioSummary`: the holdings against the
+  risk profile's model portfolio. Calls no model and retrieves nothing, so the console shows
+  the before-picture the moment a client is picked rather than after a briefing is built.
+  Entitlement-gated exactly like a briefing: a portfolio is the customer data the gate exists
+  to protect.
 - `GET /healthz` -> `{status, profile, region}`.
 - `GET /v1/personas` -> `Persona[]` (seeded dev personas; the local-profile picker; `[]`
   outside `local`).
+- `GET /v1/clients` -> the caller's tenant's clients, each with a PII-free label the SERVER
+  derives from the profile, plus the book's version and whether it is fictional. The console
+  carried its own hardcoded list of four until 2026-09-07, two of which the server did not
+  serve at all.
 - `GET /.well-known/agent-card.json` -> A2A AgentCard (skills: `build_briefing`,
   `generate_talking_points`, `check_suitability`).
 
