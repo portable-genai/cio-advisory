@@ -9,7 +9,8 @@
  * recomputes a number the engine owns, so what the reader sees is what the engine used.
  */
 
-import type { AllocationGap, GapStatus, PortfolioSummary } from "@/lib/types";
+import { DataCitationNote, ProvenanceLine } from "./DataCitationNote";
+import type { AllocationGap, GapStatus, HoldingOut, PortfolioSummary } from "@/lib/types";
 import { ASSET_CLASS_LABEL, GAP_STATUS_LABEL } from "@/lib/types";
 import { Empty } from "./ui";
 
@@ -57,12 +58,26 @@ function BandBar({ gap }: { gap: AllocationGap }) {
   );
 }
 
-function GapRow({ gap, currency }: { gap: AllocationGap; currency: string }) {
+function GapRow({
+  gap,
+  currency,
+  holdings,
+}: {
+  gap: AllocationGap;
+  currency: string;
+  holdings: HoldingOut[];
+}) {
   const short = gap.status === "under";
   return (
     <tr className="border-t border-ink-100 align-middle">
       <td className="py-2 pr-3 text-sm text-ink-800">
         {ASSET_CLASS_LABEL[gap.asset_class] ?? gap.asset_class}
+        <DataCitationNote
+          cite={gap.evidence}
+          contributors={gap.contributors}
+          holdings={holdings}
+          currency={currency}
+        />
       </td>
       <td className="py-2 pr-3 text-right font-mono text-sm text-ink-800">
         {pct(gap.current_weight)}
@@ -154,7 +169,12 @@ export function PortfolioSummaryPanel({ summary }: { summary?: PortfolioSummary 
               </thead>
               <tbody>
                 {summary.allocation_gaps.map((gap) => (
-                  <GapRow key={gap.asset_class} gap={gap} currency={summary.currency} />
+                  <GapRow
+                    key={gap.asset_class}
+                    gap={gap}
+                    currency={summary.currency}
+                    holdings={summary.holdings}
+                  />
                 ))}
               </tbody>
             </table>
@@ -165,6 +185,7 @@ export function PortfolioSummaryPanel({ summary }: { summary?: PortfolioSummary 
               {model.effective_from ? `, effective ${model.effective_from}` : ""}.
             </p>
           ) : null}
+          <ProvenanceLine cite={summary.provenance} />
         </>
       ) : (
         <p className="text-sm text-ink-500">

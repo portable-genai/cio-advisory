@@ -125,7 +125,9 @@ GCP SDK.
   CONSERVATIVE clients; hard-excluded asset classes are UNSUITABLE; a concentration breach
   forces REVIEW.
 - `gap_analysis` : pure arithmetic and pure matching. `allocation_gaps` measures each asset
-  class against the model portfolio's published band; `align_theme` says what a theme closes
+  class against the model portfolio's published band and names the positions whose values sum
+  to each figure (`contributors`, by `instrument_id`) beside the read they came from
+  (`evidence: DataCitation`); `align_theme` says what a theme closes
   or bears on; `rank_by_relevance` orders the day's themes by what they mean for this
   portfolio; `uncovered` names the under-allocated classes today's report is silent on, so a
   briefing declines to invent a theme rather than omitting the gap. **A gap is a distance
@@ -163,6 +165,17 @@ All JSON field names mirror the domain dataclasses (enums as strings).
 - `POST /v1/briefing {client_id}` -> `AdvisoryBriefing`, carrying the talking points, the
   portfolio summary with its allocation gaps, the whole report as `house_views_considered`
   (opportunities and threats alike, not only what survived suitability), and the alignment.
+
+**Every allocation figure carries a data citation.** A briefing cites the documents behind
+its narrative; the figures beside them are arithmetic over a client's book, and until they
+were traceable a reader could not tell a computed number from a generated one. `DataCitation`
+is that contract pointed at a table : which store answered (`duckdb` on a laptop, `bigquery`
+on a deployment), which table, the predicate, the row count and the book's as-of date.
+`PortfolioSummary.provenance` carries it for the summary and each `AllocationGap.evidence`
+for one figure. It describes the READ and never repeats the rows: the holdings are on the
+wire once, and `contributors` names which of them. `PortfolioPort.read_provenance` is where
+each adapter reports its own; `None` is a real answer for an adapter that cannot say, and the
+line is then absent rather than invented.
 - `POST /v1/talking-points {client_id}` -> `{client_id, talking_points[],
   not_advice_disclaimer, requires_human_review}`.
 - `POST /v1/suitability {client_id, theme}` -> `SuitabilityAssessment`.

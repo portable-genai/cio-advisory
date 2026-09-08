@@ -75,6 +75,24 @@ export interface Citation {
   score: number | null;
 }
 
+/**
+ * Where a computed figure's rows came from: the warehouse analogue of `Citation`.
+ *
+ * It describes the READ, not the rows. The rows are on the wire once, in
+ * `PortfolioSummary.holdings`; `AllocationGap.contributors` names which of them by
+ * `instrument_id`. Look them up by id — never re-derive the figure from them, for the same
+ * reason `AllocationGap` projects `drift` and `value_gap` rather than letting the console
+ * compute them: the number on screen must be the number the engine used.
+ */
+export interface DataCitation {
+  store: string; // "duckdb" | "bigquery" | "in-process"
+  dataset: string;
+  table: string;
+  predicate: string;
+  row_count: number;
+  as_of: string; // ISO date, or "" when the store does not say
+}
+
 // --------------------------------------------------------------------------- //
 // Suitability
 // --------------------------------------------------------------------------- //
@@ -123,6 +141,10 @@ export interface AllocationGap {
   total_value: number;
   drift: number;
   value_gap: number;
+  /** The `instrument_id`s whose values sum to `current_value`, chosen server-side. */
+  contributors: string[];
+  /** The read those rows came from, narrowed to this asset class. */
+  evidence: DataCitation | null;
 }
 
 export interface AllocationTarget {
@@ -159,6 +181,8 @@ export interface PortfolioSummary {
   holdings: HoldingOut[];
   allocation_gaps: AllocationGap[];
   model_portfolio: ModelPortfolio | null;
+  /** What store answered, and as of when. `null` when the adapter cannot say. */
+  provenance: DataCitation | null;
 }
 
 export interface ThemeAlignment {

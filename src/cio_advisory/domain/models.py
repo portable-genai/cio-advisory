@@ -270,12 +270,45 @@ class GapStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class DataCitation:
+    """Where a computed figure's rows came from : the warehouse analogue of a citation.
+
+    A briefing already cites the DOCUMENTS behind its narrative. Every allocation figure it
+    shows is arithmetic over rows instead, and until those rows can be named the reader has
+    no way to tell a number computed from a client's book from a number a model produced.
+    This is the same contract pointed at a table: which store answered, which table, the
+    predicate that selected the rows, how many came back, and what date they are as of.
+
+    It describes the read; it does not carry the rows. The rows a figure was computed from
+    are already on the wire once, in the portfolio summary's ``holdings``, and
+    :attr:`AllocationGap.contributors` names which of them by ``instrument_id``. Repeating
+    them per figure would put the same position on the wire six times and invite the two
+    copies to disagree.
+
+    ``row_count`` is the count the store returned, not ``len(contributors)``: they are the
+    same number when a figure covers whole rows, and when they differ that is worth seeing.
+    """
+
+    store: str  # "duckdb" | "bigquery" | "in-process" : what actually answered
+    dataset: str  # DuckDB file stem or BigQuery dataset id
+    table: str  # the table the predicate ran against
+    predicate: str  # human-readable filter, e.g. "client_id = 'client-000042'"
+    row_count: int = 0
+    as_of: str = ""  # ISO date the rows are as of ("" when the store does not say)
+
+
+@dataclass(frozen=True, slots=True)
 class AllocationGap:
     """One asset class, what the client holds in it, and what the model portfolio wants.
 
     ``drift`` is signed and in weight units: negative when the portfolio is short of the
     target, positive when it is heavy. ``value_gap`` is the same distance in money, which is
     the number a relationship manager actually discusses.
+
+    ``contributors`` names the positions whose values sum to ``current_value``, by
+    ``instrument_id``, so a reader can open one figure and see the rows underneath it. The
+    server decides membership; the console only looks the ids up. That is the difference
+    between showing the evidence for a number and recomputing the number beside it.
     """
 
     asset_class: AssetClass
@@ -286,6 +319,8 @@ class AllocationGap:
     status: GapStatus
     current_value: float = 0.0
     total_value: float = 0.0
+    contributors: tuple[str, ...] = ()  # instrument_ids summing to ``current_value``
+    evidence: DataCitation | None = None  # the read those rows came from
 
     @property
     def drift(self) -> float:
@@ -324,6 +359,11 @@ class PortfolioSummary:
     The before-picture a briefing is read against. It is deliberately available WITHOUT
     generating anything: the gaps are arithmetic over the holdings and the model portfolio,
     so the console can show them the moment a client is picked.
+
+    ``provenance`` is the read the holdings came from, so the summary can say which store
+    answered and as of when. It is ``None`` when the bound adapter does not report one,
+    which is a real state and not a failure: a briefing without a provenance line is worse
+    than one with it, but a briefing that invents a store is worse than both.
     """
 
     client_id: str
@@ -333,6 +373,7 @@ class PortfolioSummary:
     holdings: tuple[Holding, ...] = ()
     allocation_gaps: tuple[AllocationGap, ...] = ()
     model_portfolio: ModelPortfolio | None = None
+    provenance: DataCitation | None = None
 
     def gaps_under(self) -> tuple[AllocationGap, ...]:
         """The asset classes the portfolio is short of, worst first."""

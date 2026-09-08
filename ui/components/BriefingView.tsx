@@ -1,9 +1,16 @@
-/** Renders a full AdvisoryBriefing: the portfolio, the report, and the points between them. */
+/**
+ * Renders a full AdvisoryBriefing: the report and the points, WITHOUT the portfolio.
+ *
+ * The portfolio used to be rendered here, first, so a talking point was read after the
+ * gaps it closes. It is now a peer stage above this one (`app/page.tsx`), which keeps that
+ * reading order and stops the same table being on the page twice: once as the stage a
+ * reader can reopen, and once inside the briefing. Two copies of the evidence is the
+ * length problem the stage stack exists to solve, arriving from the other direction.
+ */
 
 import type { AdvisoryBriefing } from "@/lib/types";
 import { AlignmentPanel } from "./AlignmentPanel";
 import { CioViewsPanel } from "./CioViewsPanel";
-import { PortfolioSummaryPanel } from "./PortfolioSummaryPanel";
 import { TalkingPointView } from "./TalkingPointView";
 import { Empty, NotAdviceBanner, Panel, Pill } from "./ui";
 
@@ -11,14 +18,6 @@ export function BriefingView({ briefing }: { briefing: AdvisoryBriefing }) {
   return (
     <div className="space-y-4">
       <NotAdviceBanner disclaimer={briefing.not_advice_disclaimer} />
-
-      {/* The portfolio comes first on purpose. A talking point read before the gaps is a
-          theme; read after them it is a theme that closes a shortfall the reader has seen. */}
-      {briefing.portfolio_summary ? (
-        <Panel title="Portfolio against the client's risk profile">
-          <PortfolioSummaryPanel summary={briefing.portfolio_summary} />
-        </Panel>
-      ) : null}
 
       {briefing.house_views_considered.length > 0 ? (
         <Panel title="CIO house view: opportunities and threats for this portfolio">
