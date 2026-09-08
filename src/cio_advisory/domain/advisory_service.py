@@ -39,6 +39,7 @@ from .models import (
     AuditEvent,
     Citation,
     ClientProfile,
+    DataCitation,
     Decision,
     Direction,
     GapStatus,
@@ -152,7 +153,9 @@ class AdvisoryService:
         #    it. Both are optional: a bank that has published no model portfolio gets a
         #    briefing with no allocation gaps rather than gaps against invented targets.
         model = self._load_model_portfolio(profile)
-        summary = ga.summarise(portfolio, model, profile.risk_appetite)
+        summary = ga.summarise(
+            portfolio, model, profile.risk_appetite, self._read_provenance(client_id)
+        )
 
         # 4) Retrieve CIO house views from the governed KB (A2). Empty -> hard error.
         query = self._build_query(profile, portfolio)
@@ -242,6 +245,24 @@ class AdvisoryService:
         if portfolio is None:
             raise PortfolioUnavailableError(f"no portfolio for client {client_id!r}")
         return portfolio
+
+    def _read_provenance(self, client_id: str) -> DataCitation | None:
+        """What the bound portfolio adapter says it did to answer this client.
+
+        Optional in exactly the way :meth:`_load_model_portfolio` is, and for the same
+        reason: an adapter that cannot report its read costs the briefing a provenance
+        line, not the briefing. The on-prem placeholder's NotImplementedError propagates,
+        because that profile exists to fail loudly rather than to look complete.
+        """
+        reader = getattr(self._portfolio, "read_provenance", None)
+        if reader is None:
+            return None
+        try:
+            return reader(client_id)  # type: ignore[no-any-return]
+        except NotImplementedError:
+            raise
+        except Exception:  # noqa: BLE001 - an unreportable read is a missing line, not an error
+            return None
 
     def _load_model_portfolio(self, profile: ClientProfile) -> ModelPortfolio | None:
         """The published allocation for this profile, or ``None`` when there is none.

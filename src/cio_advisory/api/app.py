@@ -434,7 +434,26 @@ def client_portfolio(
             model = getter(profile.risk_appetite, profile.jurisdiction)
         except Exception:  # noqa: BLE001 - an unpublished allocation is not a failure
             model = None
-    return PortfolioSummaryModel.from_domain(ga.summarise(holdings, model, profile.risk_appetite))
+    return PortfolioSummaryModel.from_domain(
+        ga.summarise(holdings, model, profile.risk_appetite, _read_provenance(client_id))
+    )
+
+
+def _read_provenance(client_id: str) -> Any:
+    """What the bound portfolio adapter says it did, or ``None`` when it will not say.
+
+    Best-effort by design and never fatal: a provenance line is an addition to a summary,
+    so an adapter that cannot produce one (the on-prem placeholder) must cost the reader the
+    line and not the portfolio. The failure mode this guards against is the opposite of the
+    usual one : here, refusing to answer would be the bug.
+    """
+    reader = getattr(deps.get_container().portfolio, "read_provenance", None)
+    if reader is None:
+        return None
+    try:
+        return reader(client_id)
+    except Exception:  # noqa: BLE001 - an unreportable read is a missing line, not an error
+        return None
 
 
 @app.post(

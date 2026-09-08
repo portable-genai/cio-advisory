@@ -88,7 +88,10 @@ port, that `onprem` fails fast, and that `local` answers in-process.
 | `tool_catalog` | MCP | in-process | n/a | placeholder |
 
 `portfolio` has no platform binding: client portfolios are internal data and never leave
-the residency perimeter over a cross-service hop. Under `local`, the platform-client ports
+the residency perimeter over a cross-service hop. Each of its adapters also reports its own
+read through `read_provenance`, so the console names the store that actually answered rather
+than the one the profile is nominally bound to : DuckDB says DuckDB and BigQuery says
+BigQuery, and neither borrows the other's credibility. Under `local`, the platform-client ports
 (registry, audit, guardrail, redaction, eval) use in-process implementations rather than
 HTTP to siblings: a laptop runs one app, not the whole platform.
 

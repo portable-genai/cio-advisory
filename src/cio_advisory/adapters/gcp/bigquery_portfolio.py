@@ -17,7 +17,13 @@ from typing import Any
 from ...config import Settings
 from ...domain._grounded import coerce_asset_class
 from ...domain.errors import PortfolioUnavailableError
-from ...domain.models import ClientProfile, Holding, Portfolio, RiskAppetite
+from ...domain.models import (
+    ClientProfile,
+    DataCitation,
+    Holding,
+    Portfolio,
+    RiskAppetite,
+)
 
 #: The columns this adapter selects, per settings key for the table it selects them from.
 #: Declared rather than only spelled inside the SQL so a contract test can hold them against
@@ -36,6 +42,10 @@ SELECTED_COLUMNS: dict[str, tuple[str, ...]] = {
         "tenant",
     ),
     "instruments_table": ("instrument_id", "name", "asset_class"),
+    # read_provenance reads the book's as-of date so the console can date the figures it
+    # shows. Declared here for the same reason as the rest: the contract test is what stops
+    # a provenance line from selecting a column the dataset does not have.
+    "manifest_table": ("as_of_date",),
 }
 
 
@@ -121,6 +131,39 @@ class BigQueryPortfolioAdapter:
             jurisdiction=str(row.get("jurisdiction") or "SG"),
             tenant=str(row.get("tenant") or ""),
         )
+
+    def read_provenance(self, client_id: str) -> DataCitation:
+        """The BigQuery read behind this client's holdings, named as BigQuery.
+
+        The as-of date is read from the dataset's own manifest table rather than assumed, so
+        a deployment loaded with a real book reports the real book's date and never the
+        shipped demo book's. A dataset with no manifest table, or an unreadable one, reports
+        an empty date: not saying is correct, and guessing would put a date on screen that
+        no row supports.
+        """
+        as_of = ""
+        try:
+            rows = self._query_unparameterised(
+                f"SELECT as_of_date FROM `{self._table(self._bq.manifest_table)}` "
+                f"ORDER BY as_of_date DESC LIMIT 1"
+            )
+            if rows and rows[0].get("as_of_date") is not None:
+                as_of = str(rows[0]["as_of_date"])[:10]
+        except Exception:  # noqa: BLE001 - a missing manifest is a missing date, not an error
+            as_of = ""
+        return DataCitation(
+            store="bigquery",
+            dataset=self._bq.dataset,
+            table=self._bq.portfolio_table,
+            predicate=f"client_id = '{client_id}'",
+            row_count=0,  # the caller knows how many rows it received; this states the read
+            as_of=as_of,
+        )
+
+    def _query_unparameterised(self, sql: str) -> list[dict[str, Any]]:
+        """Run a query that binds no client value. Never used with interpolated input."""
+        client = self._get_client()
+        return [dict(row) for row in client.query(sql).result()]
 
     def _query(self, client: Any, sql: str, client_id: str) -> list[dict[str, Any]]:
         from google.cloud import bigquery  # lazy

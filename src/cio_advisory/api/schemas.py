@@ -136,6 +136,32 @@ class TalkingPointModel(BaseModel):
         )
 
 
+class DataCitationModel(BaseModel):
+    """Where a figure's rows came from: the warehouse analogue of a document citation.
+
+    It describes the READ, not the rows. The rows are on the wire once, in the summary's
+    ``holdings``, and each gap's ``contributors`` names which of them by ``instrument_id``.
+    """
+
+    store: str = ""  # duckdb | bigquery | in-process
+    dataset: str = ""
+    table: str = ""
+    predicate: str = ""
+    row_count: int = 0
+    as_of: str = ""
+
+    @classmethod
+    def from_domain(cls, cite: m.DataCitation) -> DataCitationModel:
+        return cls(
+            store=cite.store,
+            dataset=cite.dataset,
+            table=cite.table,
+            predicate=cite.predicate,
+            row_count=cite.row_count,
+            as_of=cite.as_of,
+        )
+
+
 class AllocationGapModel(BaseModel):
     """One asset class against the model portfolio's band, with the distance in both units."""
 
@@ -152,6 +178,10 @@ class AllocationGapModel(BaseModel):
     #: owns and the two can never round differently.
     drift: float = 0.0
     value_gap: float = 0.0
+    #: The instrument_ids whose values sum to current_value, and the read they came
+    #: from. Together they are what lets a reader open a figure and see its rows.
+    contributors: list[str] = Field(default_factory=list)
+    evidence: DataCitationModel | None = None
 
     @classmethod
     def from_domain(cls, gap: m.AllocationGap) -> AllocationGapModel:
@@ -166,6 +196,10 @@ class AllocationGapModel(BaseModel):
             total_value=gap.total_value,
             drift=gap.drift,
             value_gap=gap.value_gap,
+            contributors=list(gap.contributors),
+            evidence=(
+                DataCitationModel.from_domain(gap.evidence) if gap.evidence is not None else None
+            ),
         )
 
 
@@ -240,6 +274,8 @@ class PortfolioSummaryModel(BaseModel):
     holdings: list[HoldingModelOut] = Field(default_factory=list)
     allocation_gaps: list[AllocationGapModel] = Field(default_factory=list)
     model_portfolio: ModelPortfolioModel | None = None
+    #: What store answered, and as of when. None when the bound adapter cannot say.
+    provenance: DataCitationModel | None = None
 
     @classmethod
     def from_domain(cls, summary: m.PortfolioSummary) -> PortfolioSummaryModel:
@@ -253,6 +289,11 @@ class PortfolioSummaryModel(BaseModel):
             model_portfolio=(
                 ModelPortfolioModel.from_domain(summary.model_portfolio)
                 if summary.model_portfolio is not None
+                else None
+            ),
+            provenance=(
+                DataCitationModel.from_domain(summary.provenance)
+                if summary.provenance is not None
                 else None
             ),
         )

@@ -26,9 +26,12 @@ by a reviewer, which is the same standard the suitability policy is held to.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .models import (
     AllocationGap,
     AssetClass,
+    DataCitation,
     GapStatus,
     Holding,
     HouseView,
@@ -55,7 +58,9 @@ def status_for(weight: float, minimum: float, maximum: float) -> GapStatus:
 
 
 def allocation_gaps(
-    portfolio: Portfolio, model: ModelPortfolio | None
+    portfolio: Portfolio,
+    model: ModelPortfolio | None,
+    read: DataCitation | None = None,
 ) -> tuple[AllocationGap, ...]:
     """Every asset class the model portfolio names, against what the client holds.
 
@@ -74,45 +79,94 @@ def allocation_gaps(
         named.add(target.asset_class)
         weight = portfolio.weight_in(target.asset_class)
         gaps.append(
-            AllocationGap(
+            _gap(
+                portfolio,
                 asset_class=target.asset_class,
-                current_weight=weight,
+                weight=weight,
                 target_weight=target.target_weight,
                 min_weight=target.min_weight,
                 max_weight=target.max_weight,
-                status=status_for(weight, target.min_weight, target.max_weight),
-                current_value=round(
-                    sum(h.value for h in portfolio.holdings if h.asset_class is target.asset_class),
-                    2,
-                ),
-                total_value=total,
+                total=total,
+                read=read,
             )
         )
     for asset_class in sorted({h.asset_class for h in portfolio.holdings} - named, key=str):
         weight = portfolio.weight_in(asset_class)
         gaps.append(
-            AllocationGap(
+            _gap(
+                portfolio,
                 asset_class=asset_class,
-                current_weight=weight,
+                weight=weight,
                 target_weight=0.0,
                 min_weight=0.0,
                 max_weight=0.0,
-                status=status_for(weight, 0.0, 0.0),
-                current_value=round(
-                    sum(h.value for h in portfolio.holdings if h.asset_class is asset_class), 2
-                ),
-                total_value=total,
+                total=total,
+                read=read,
             )
         )
     return tuple(gaps)
+
+
+def _gap(
+    portfolio: Portfolio,
+    *,
+    asset_class: AssetClass,
+    weight: float,
+    target_weight: float,
+    min_weight: float,
+    max_weight: float,
+    total: float,
+    read: DataCitation | None,
+) -> AllocationGap:
+    """One gap, with the positions that produced its value named alongside it.
+
+    ``contributors`` and ``current_value`` are derived from the SAME comprehension, so the
+    ids on screen cannot drift from the money on screen: a position counted in one is
+    counted in the other by construction, not by a second pass that agrees today.
+    """
+    contributing = [h for h in portfolio.holdings if h.asset_class is asset_class]
+    return AllocationGap(
+        asset_class=asset_class,
+        current_weight=weight,
+        target_weight=target_weight,
+        min_weight=min_weight,
+        max_weight=max_weight,
+        status=status_for(weight, min_weight, max_weight),
+        current_value=round(sum(h.value for h in contributing), 2),
+        total_value=total,
+        contributors=tuple(h.instrument_id for h in contributing if h.instrument_id),
+        evidence=_narrow(read, asset_class, len(contributing)),
+    )
+
+
+def _narrow(read: DataCitation | None, asset_class: AssetClass, rows: int) -> DataCitation | None:
+    """The store's read, narrowed to the predicate that selected THIS class's rows.
+
+    The adapter reports the read it performed (one client's whole book); a figure covers a
+    slice of it. Narrowing here rather than in the adapter keeps the adapter honest about
+    what it actually ran and still lets each figure state the filter behind it.
+    """
+    if read is None:
+        return None
+    return replace(
+        read,
+        predicate=f"{read.predicate} AND asset_class = '{asset_class.value}'",
+        row_count=rows,
+    )
 
 
 def summarise(
     portfolio: Portfolio,
     model: ModelPortfolio | None,
     risk_appetite: object,
+    read: DataCitation | None = None,
 ) -> PortfolioSummary:
-    """The before-picture: holdings, and every asset class against its band."""
+    """The before-picture: holdings, and every asset class against its band.
+
+    ``read`` is what the bound portfolio adapter says it did to produce these holdings. It
+    is threaded through rather than looked up here because this module reads no store: it
+    is arithmetic over what it was handed, and it stays that way.
+    """
     from .models import RiskAppetite  # local import keeps the signature readable
 
     appetite = risk_appetite if isinstance(risk_appetite, RiskAppetite) else RiskAppetite.BALANCED
@@ -122,8 +176,9 @@ def summarise(
         total_value=portfolio.total_value or sum(h.value for h in portfolio.holdings),
         currency=portfolio.currency,
         holdings=portfolio.holdings,
-        allocation_gaps=allocation_gaps(portfolio, model),
+        allocation_gaps=allocation_gaps(portfolio, model, read),
         model_portfolio=model,
+        provenance=(None if read is None else replace(read, row_count=len(portfolio.holdings))),
     )
 
 

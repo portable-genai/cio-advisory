@@ -40,6 +40,7 @@ from ...domain.models import (
     AllocationTarget,
     AssetClass,
     ClientProfile,
+    DataCitation,
     Holding,
     ModelPortfolio,
     Portfolio,
@@ -383,6 +384,29 @@ class LocalPortfolioAdapter:
             holdings=holdings,
             total_value=sum(h.value for h in holdings),
             currency=holdings[0].currency,
+        )
+
+    def read_provenance(self, client_id: str) -> DataCitation:
+        """The DuckDB read behind this client's holdings, named as DuckDB and not as BigQuery.
+
+        The as-of date comes from the store's own manifest rather than from the shipped
+        package, so a book somebody loaded themselves reports THEIR date. A store with no
+        manifest row reports an empty date, which reads as "the store does not say".
+        """
+        manifest = self._manifest_rows()
+        as_of = ""
+        for row in manifest:
+            value = row.get("as_of_date")
+            if value:
+                as_of = str(value)[:10]
+                break
+        return DataCitation(
+            store="duckdb",
+            dataset=Path(self._path).stem if self._path != ":memory:" else ":memory:",
+            table="holdings",
+            predicate=f"client_id = '{client_id}'",
+            row_count=0,  # the caller knows how many rows it received; this states the read
+            as_of=as_of,
         )
 
     def get_model_portfolio(

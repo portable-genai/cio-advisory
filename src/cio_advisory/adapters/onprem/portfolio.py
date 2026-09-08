@@ -11,7 +11,13 @@ store is *only* a matter of filling these bodies in : the core domain logic is u
 from __future__ import annotations
 
 from ...config import Settings
-from ...domain.models import ClientProfile, ModelPortfolio, Portfolio, RiskAppetite
+from ...domain.models import (
+    ClientProfile,
+    DataCitation,
+    ModelPortfolio,
+    Portfolio,
+    RiskAppetite,
+)
 
 _MESSAGE = (
     "On-prem PortfolioPort adapter is a migration placeholder; implement against your "
@@ -37,4 +43,11 @@ class OnPremPortfolioAdapter:
         # Raises rather than returning None: None is the real answer for "this bank has not
         # published one", and a placeholder returning it would report a MISSING allocation as
         # a deliberate absence, which is the failure this profile exists to refuse.
+        raise NotImplementedError(_MESSAGE)
+
+    def read_provenance(self, client_id: str) -> DataCitation:
+        # Raises for the same reason as the reads above, and NOT returning None: None means
+        # "this store cannot say where its rows came from", which is a claim a working
+        # adapter is entitled to make. A placeholder returning it would report an unbuilt
+        # adapter as a reticent one.
         raise NotImplementedError(_MESSAGE)
