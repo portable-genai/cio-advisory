@@ -18,10 +18,12 @@ The headless-browser journey over the same served pages lives in
 
 from __future__ import annotations
 
+import ast
 import re
 import threading
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 import render_cio_ui as r
 from cio_demo_server import STEPS, DemoSession, Handler
@@ -52,6 +54,26 @@ def _hook(html: str, attribute: str) -> str:
     return found[0]
 
 
+def _narration_length() -> int:
+    """How many steps the presenter script narrates, READ rather than imported.
+
+    ``cio_demo_playwright`` imports playwright at module scope, and the offline gate
+    installs the dev lock without it on purpose: the day-one gate must stay installable with
+    no browser binary to download. Importing it here made this whole check pass on any
+    machine that happened to have the demo extra and fail in CI, which is the machine that
+    matters. Parsing the literal needs nothing installed and asserts the same fact.
+    """
+    source = (Path(__file__).with_name("cio_demo_playwright.py")).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "STEPS" for t in node.targets
+        ):
+            assert isinstance(node.value, ast.List), "STEPS is no longer a list literal"
+            return len(node.value.elts)
+    raise AssertionError("cio_demo_playwright.py declares no STEPS list")
+
+
 def check_step_lists_agree() -> None:
     """The presenter's narration and the server's reveal steps must be the same length.
 
@@ -60,10 +82,9 @@ def check_step_lists_agree() -> None:
     leaves a panel on screen in silence, and a line without a step narrates a page that
     never changes. Neither is visible until somebody is presenting.
     """
-    from cio_demo_playwright import STEPS as NARRATION
-
-    assert len(NARRATION) == len(STEPS), (
-        f"the presenter narrates {len(NARRATION)} steps and the server reveals {len(STEPS)}"
+    narrated = _narration_length()
+    assert narrated == len(STEPS), (
+        f"the presenter narrates {narrated} steps and the server reveals {len(STEPS)}"
     )
     print(f"PASS presenter: {len(STEPS)} reveal steps, each with a line to say over it")
 
