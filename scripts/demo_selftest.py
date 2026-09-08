@@ -27,6 +27,11 @@ import render_cio_ui as r
 from cio_demo_server import STEPS, DemoSession, Handler
 
 
+def index_of_client(data: dict, client: dict) -> int:
+    """Where this client sits in the payload, so a step's index can be matched to it."""
+    return data["clients"].index(client)
+
+
 def _hooks(html: str, attribute: str) -> list[str]:
     """Every value of one stable ``data-*`` evidence hook, in document order.
 
@@ -47,11 +52,27 @@ def _hook(html: str, attribute: str) -> str:
     return found[0]
 
 
+def check_step_lists_agree() -> None:
+    """The presenter's narration and the server's reveal steps must be the same length.
+
+    They are two lists in two files, and nothing connected them. The walkthrough clicks
+    "Next" once per narration entry, so a server step added without a line to say over it
+    leaves a panel on screen in silence, and a line without a step narrates a page that
+    never changes. Neither is visible until somebody is presenting.
+    """
+    from cio_demo_playwright import STEPS as NARRATION
+
+    assert len(NARRATION) == len(STEPS), (
+        f"the presenter narrates {len(NARRATION)} steps and the server reveals {len(STEPS)}"
+    )
+    print(f"PASS presenter: {len(STEPS)} reveal steps, each with a line to say over it")
+
+
 def check_in_process() -> None:
     session = DemoSession()
     opening = session.render()
     assert "decision-support" in opening.lower() and "data-demo='presenter-step'" in opening
-    assert len(session.data["clients"]) == 2
+    assert len(session.data["clients"]) == 3, "the demo shows three clients, not two"
     page = opening
     while not session.at_end:
         session.advance()
@@ -60,7 +81,29 @@ def check_in_process() -> None:
     flagged = session.data["clients"][1]["talking_points"]
     assert any(point["suitability"]["verdict"] in {"review", "unsuitable"} for point in flagged)
     assert session.idx == len(STEPS) - 1 and "Demo complete" in page
-    print("PASS demo: two-client suitability contrast and review gate rendered")
+
+    # The demo's headline, asserted rather than narrated: the conservative client HAS an
+    # equity gap, the report DOES carry a theme that would close it, and that theme is NOT
+    # among the points shown. A demo that lost any one of the three would still look fine.
+    conservative = session.data["clients"][1]
+    gaps = conservative["portfolio_summary"]["allocation_gaps"]
+    equity = next(g for g in gaps if g["asset_class"] == "equity")
+    assert equity["status"] == "under", "the conservative client's equity gap is the setup"
+    considered = {link["theme"] for link in conservative["house_views_considered"]}
+    presented = {point["house_view_theme"] for point in conservative["talking_points"]}
+    dropped = considered - presented
+    assert dropped, "nothing was refused, so the suitability contrast is not being shown"
+    assert "AI infrastructure build-out" in dropped, (
+        "the theme that would close this client's equity gap should be refused for them"
+    )
+
+    # And the balanced client's gaps carry real figures, not just a theme name.
+    balanced = session.data["clients"][0]["portfolio_summary"]["allocation_gaps"]
+    under = [g for g in balanced if g["status"] == "under"]
+    assert under, "the balanced client is short of something; the payload should say so"
+    assert all(g["target_weight"] > g["current_weight"] for g in under)
+
+    print("PASS demo: three clients, gap figures, and the refused gap-closing theme rendered")
 
 
 def check_served() -> None:
@@ -122,6 +165,15 @@ def check_served() -> None:
 
             alignment = client["alignment"]
             assert _hooks(page, "data-align") == ["in-line", "gaps", "overweights"]
+            # The portfolio panel is the one that makes a recommendation mean something, so
+            # its figures are read back out of the SERVED bytes like every other claim here.
+            summary = client.get("portfolio_summary") or {}
+            served_gaps = summary.get("allocation_gaps") or []
+            if served_gaps and step["client"] == index_of_client(data, client):
+                assert _hook(page, "data-gaps-under") == str(
+                    sum(1 for g in served_gaps if g["status"] == "under")
+                ), "the served portfolio panel disagrees with the briefing about the gaps"
+                assert _hooks(page, "data-gap") == [g["asset_class"] for g in served_gaps]
             assert _hooks(page, "data-align-count") == [
                 str(len(alignment["themes_in_line"])),
                 str(len(alignment["gaps"])),
@@ -163,6 +215,7 @@ def check_served() -> None:
 
 
 def main() -> int:
+    check_step_lists_agree()
     check_in_process()
     check_served()
     return 0

@@ -75,6 +75,18 @@ table.idx td.num{font-variant-numeric:tabular-nums}
 """
 
 
+# Styles for the portfolio panel, in the existing ink / regblue palette.
+CSS += """
+table.gaps{width:100%;border-collapse:collapse;font-size:13px}
+table.gaps th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+  color:#6b7c93;font-weight:600;padding-bottom:4px}
+table.gaps th.num,table.gaps td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.gaps td{border-top:1px solid #e6ebf2;padding:6px 8px 6px 0}
+p.uncovered{margin:10px 0 0;padding:8px 10px;background:#f4f6fa;border-radius:8px;
+  font-size:12px;color:#4a5a6f}
+"""
+
+
 def esc(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
@@ -162,6 +174,63 @@ def _col(title: str, slug: str, items: list[str]) -> str:
     )
 
 
+def _pct(value: float) -> str:
+    return f"{round(value * 100)}%"
+
+
+def render_portfolio(summary: dict | None) -> str:
+    """The before-picture: every asset class against the model portfolio's published band.
+
+    Rendered before the talking points, because a recommendation read before the gaps is a
+    theme and read after them is a theme that closes a shortfall the reader has just seen.
+    Every figure comes from the payload the engine produced; nothing here recomputes one.
+    """
+    if not summary:
+        return ""
+    gaps = summary.get("allocation_gaps") or []
+    model = summary.get("model_portfolio") or {}
+    currency = summary.get("currency", "USD")
+    if not gaps:
+        rows = (
+            "<p class=muted>No model portfolio is published for this risk profile, "
+            "so no allocation gaps are computed.</p>"
+        )
+    else:
+        body = []
+        for gap in gaps:
+            status = gap["status"]
+            short = status == "under"
+            money = abs(gap["target_weight"] - gap["current_weight"]) * gap.get("total_value", 0)
+            to_target = (
+                "-" if status == "in_range" else f"{'+' if short else '-'}{currency} {money:,.0f}"
+            )
+            body.append(
+                f"<tr data-gap='{esc(gap['asset_class'])}' data-gap-status='{esc(status)}'>"
+                f"<td>{esc(gap['asset_class'])}</td>"
+                f"<td class='num'>{_pct(gap['current_weight'])}</td>"
+                f"<td class='num muted'>{_pct(gap['target_weight'])} "
+                f"({_pct(gap['min_weight'])} to {_pct(gap['max_weight'])})</td>"
+                f"<td><span class='pill {'warn' if status == 'over' else ('info' if short else 'ok')}'>"
+                f"{esc(status.replace('_', ' '))}</span></td>"
+                f"<td class='num'>{esc(to_target)}</td></tr>"
+            )
+        rows = (
+            "<table class='gaps'><thead><tr><th>Asset class</th><th class='num'>Holds</th>"
+            "<th class='num'>Target</th><th>Status</th><th class='num'>To target</th></tr>"
+            "</thead><tbody>" + "".join(body) + "</tbody></table>"
+        )
+    n_under = sum(1 for g in gaps if g["status"] == "under")
+    n_over = sum(1 for g in gaps if g["status"] == "over")
+    return (
+        f"<section class='panel' data-panel='portfolio' data-gaps-under='{n_under}' "
+        f"data-gaps-over='{n_over}'>"
+        f"<h2>Portfolio against the client's risk profile <span class='muted'>"
+        f"{summary.get('total_value', 0):,.0f} {esc(currency)}"
+        f"{' · ' + esc(model.get('model_id', '')) if model else ''}</span></h2>"
+        f"<div class='body'>{rows}</div></section>"
+    )
+
+
 def render_alignment(align: dict) -> str:
     return (
         '<section class="panel" data-panel="alignment">'
@@ -169,7 +238,17 @@ def render_alignment(align: dict) -> str:
         + _col("In line", "in-line", align.get("themes_in_line", []))
         + _col("Gaps", "gaps", align.get("gaps", []))
         + _col("Overweights", "overweights", align.get("overweights", []))
-        + "</div></div></section>"
+        + "</div>"
+        + (
+            "<p class='uncovered' data-uncovered='"
+            + esc(",".join(align.get("uncovered_gaps", [])))
+            + "'>Not covered by this report: "
+            + esc(", ".join(align.get("uncovered_gaps", [])))
+            + ". The briefing says so rather than inventing a theme.</p>"
+            if align.get("uncovered_gaps")
+            else ""
+        )
+        + "</div></section>"
     )
 
 
@@ -206,6 +285,7 @@ def render_client(meta: dict, client: dict) -> str:
     body = (
         header
         + banner
+        + render_portfolio(client.get("portfolio_summary"))
         + tp_panel
         + render_alignment(client.get("alignment", {}))
         + "<p class='foot'>Audit-first advisory view · synthetic fictional data · "

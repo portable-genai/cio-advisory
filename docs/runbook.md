@@ -45,7 +45,8 @@ review), never a 500. A missing portfolio or empty house-view result returns a 2
 | Symptom | Likely cause | Action |
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
-| `RetrievalEmptyError` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed in `enterprise-knowledge-base`. |
+| `RetrievalEmptyError` under `platform` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed there. |
+| `RetrievalEmptyError` under `gcp` | The Agent Search store holds no records | Run `make ingest-house-views PROJECT=<id>`. Terraform creates the store empty. |
 | `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the book is loaded (`make load-demo-book`). A client loaded under a different tenant reads as absent by design: the entitlement gate fails closed. |
 | Briefing has fewer points than house views | UNSUITABLE points were dropped | Expected: unsuitable themes are never presented. Review the audit metadata `n_review_or_unsuitable`. |
 | Eval gate fails on `no_advice_safety` | Output read as advice or missing disclaimer | A prompt or post-processing change leaked directive phrasing. Revert and re-run `python eval/run_eval.py`. |
@@ -79,6 +80,20 @@ real client book and it stops with the row counts it found.
 **Terraform runs first.** The loader fills tables, it never creates them, and it says so
 rather than half-loading. Changing a REQUIRED column on a `deletion_protection` table is a
 replace, so apply the schema before there is anything in it worth keeping.
+
+### The house-view store
+
+The standalone `gcp` profile retrieves house views from an Agent Search data store, created
+by `infra/terraform/house_views.tf` and filled by `scripts/ingest_house_views.py`:
+
+```bash
+make ingest-house-views PROJECT=<id>
+```
+
+Until it holds records the pipeline refuses every briefing with `RetrievalEmptyError`, which
+is correct (nothing ungrounded is ever answered) and a confusing way to learn that a store
+was never provisioned. The `platform` profile does not use it: retrieval there is delegated
+to `enterprise-knowledge-base`.
 
 Verify with a briefing that exercises the join and the tenant:
 

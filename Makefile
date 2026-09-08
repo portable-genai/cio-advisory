@@ -23,7 +23,7 @@ export CIO_PROFILE := $(PROFILE)
 .DEFAULT_GOAL := help
 .PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
         demo-browser portability ui-install ui-check run-api run-ui tf-plan clean \
-        demo-book-dry-run load-demo-book render-golden
+        demo-book-dry-run load-demo-book render-golden ingest-house-views
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -48,9 +48,13 @@ fmt: ## Auto-format and auto-fix lint issues.
 
 lint: ## Lint (ruff), check formatting, and type-check (mypy).
 	ruff check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py \
+		scripts/ingest_house_views.py scripts/cio_demo.py scripts/cio_demo_playwright.py \
+		scripts/cio_demo_server.py
 	ruff format --check $(SRC) $(TESTS) eval scripts/demo_selftest.py scripts/portability_demo.py \
-		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py
+		scripts/render_cio_ui.py scripts/load_demo_book.py scripts/render_golden.py \
+		scripts/ingest_house_views.py scripts/cio_demo.py scripts/cio_demo_playwright.py \
+		scripts/cio_demo_server.py
 	mypy $(SRC)
 
 test: ## Run unit + contract tests on the local profile (no GCP SDK required).
@@ -122,6 +126,9 @@ demo-book-dry-run: ## Write the NDJSON the loader WOULD send to BigQuery, and st
 
 load-demo-book: ## Load the fictional client book into a deployment's dataset (needs TENANT).
 	$(PYTHON) scripts/load_demo_book.py --project $(PROJECT) --tenant $(TENANT)
+
+ingest-house-views: ## Ingest the shipped CIO corpus into the managed search store.
+	$(PYTHON) scripts/ingest_house_views.py --project $(PROJECT)
 
 tf-plan: ## Terraform plan for the asia-southeast1 infrastructure.
 	cd $(TF_DIR) && terraform init -input=false && terraform plan

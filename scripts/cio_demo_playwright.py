@@ -44,39 +44,62 @@ CHROME_PATH = os.environ.get("CHROME_PATH") or None
 # (narration shown in the terminal, whether this step clicks "Next", panel to spotlight)
 STEPS = [
     (
-        "Balanced client (client-000042). The assistant has run the full offline pipeline "
-        "— redact, guardrail, retrieve CIO house views, synthesise — and the cited TALKING "
-        "POINTS are on screen, each with a suitability verdict pill. Note the amber "
-        "not-advice banner: this is decision-support, not financial advice.",
+        "Start with the client, not the report. This is client-000042's portfolio against "
+        "the model portfolio the bank publishes for a balanced profile. They hold 30 percent "
+        "equity where the target is 45 with a floor of 35, so they are 15 points short: "
+        "180,000 dollars short, on a 1.2 million book. And 35 percent sits in cash against a "
+        "ceiling of 10. Every one of those figures is arithmetic, not a model's opinion.",
         False,
+        "[data-panel='portfolio']",
+    ),
+    (
+        "Now the house view, read against that portfolio. Each talking point is cited back "
+        "to a CIO article, carries a suitability verdict, and says which gap it closes: the "
+        "AI infrastructure theme is the one that would take equity towards its target. Note "
+        "the amber banner: decision-support, not financial advice.",
+        True,
         ".banner",
     ),
     (
-        "Portfolio alignment for the balanced client — which OVERWEIGHT house-view themes "
-        "the portfolio already reflects (in line), which it under-holds (gaps), and where a "
-        "single asset class is at or above the concentration limit (overweights).",
+        "Theme by theme, and the honest line at the bottom. This client is also short of "
+        "alternatives and real assets, and today's report offers nothing that closes either. "
+        "The briefing says so rather than inventing a theme to fill the space.",
         True,
         ".align",
     ),
     (
-        "Now the conservative, retail client (client-000077). Watch the SAME CIO house "
-        "views earn different verdicts: the aggressive equity overweight is dropped as "
-        "UNSUITABLE, and the others flag REVIEW (ESG-only constraint, concentration, "
-        "knowledge). The suitability policy is a pure, replayable function.",
+        "A second client, and the same house views. client-000077 is conservative and "
+        "retail, ESG-only and no-illiquid, and they are 20 points short of equity: a larger "
+        "gap than the first client's, and 160,000 dollars.",
+        True,
+        "[data-panel='portfolio']",
+    ),
+    (
+        "Here is the moment worth slowing down for. The theme that would close that equity "
+        "gap is the same AI infrastructure theme, and it is NOT in this client's points: the "
+        "suitability policy dropped it as UNSUITABLE for a conservative client, and the "
+        "engine will not present it however large the gap is. The rest flag REVIEW. A gap is "
+        "a reason to talk, never a reason to override the suitability check.",
         True,
         ".verdict",
     ),
     (
-        "Portfolio alignment for the conservative client — a different picture: the AI "
-        "infrastructure theme is a gap, and the bond/cash concentration shows as "
-        "overweights.",
+        "Theme by theme for the conservative client, for contrast with the first.",
         True,
         ".align",
     ),
     (
+        "A third client, where the threat is the story. client-000418 holds 25 percent in "
+        "real assets against a 5 to 15 band, and the commercial real estate theme names the "
+        "REIT fund carrying it. That link comes from the instrument's own tags, not from the "
+        "model guessing which holding a theme is about.",
+        True,
+        "[data-panel='portfolio']",
+    ),
+    (
         "Maker-checker — every briefing always requires human review (P-06). The RM is the "
         "human checker; the assistant is only the maker. Every talking point is cited back "
-        "to a CIO house view, so a reviewer can trace each claim.",
+        "to a CIO house view, and every figure beside it can be recomputed by hand.",
         True,
         ".banner",
     ),

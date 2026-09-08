@@ -1,7 +1,8 @@
 """Runnable demo of the B3 advisory-briefing flow (synthetic, fictional data).
 
-Builds the suitability-checked advisory briefing for each built-in synthetic client
-(``client-000042`` balanced/informed, ``client-000077`` conservative/retail) through the
+Builds the suitability-checked advisory briefing for three clients from the shipped book
+(``client-000042`` balanced, ``client-000077`` conservative, ``client-000418`` aggressive)
+through the
 *real* :class:`~cio_advisory.domain.services.AdvisoryService` pipeline on the ``local``
 profile: redact -> guardrail(INPUT) -> load profile + portfolio -> retrieve CIO house
 views (local SQLite FTS5) -> synthesise talking points + per-theme suitability -> drop
@@ -16,7 +17,8 @@ It prints a per-client summary (talking points, suitability verdicts, alignment)
 writes the full artifact JSON (one entry per client) for the UI to render. No Google
 Cloud, no API key, no LLM call: the local deterministic LLM narrates and the suitability
 policy is a pure function (replayable by a reviewer). The headline of the demo is that the
-SAME CIO house views earn different suitability verdicts for the two clients.
+SAME CIO house views earn different suitability verdicts for different clients, and that
+each verdict is set against a portfolio gap the reader can check in the same output.
 """
 
 from __future__ import annotations
@@ -31,13 +33,23 @@ from cio_advisory.config import Settings, build_container
 from cio_advisory.domain.identity import Principal
 from cio_advisory.domain.serialization import to_jsonable
 
-# The two synthetic clients the local corpus ships with (opaque, non-PII ids).
+# Three clients from the shipped book, chosen because each shows a different half of the
+# argument rather than because three is a nice number:
+#
+#   client-000042  the gaps: short of equity by 15 points and 180,000, heavy in cash
+#   client-000077  the SAME report, refused: the theme that would close their equity gap is
+#                  unsuitable for a conservative, ESG-only client and is dropped
+#   client-000418  the threat: real assets over its band, and the theme names the fund
+#
+# The ids are the book's, so a change to the book changes what this prints rather than
+# leaving the demo narrating clients that no longer exist.
 CLIENTS: list[tuple[str, str]] = [
     ("client-000042", "Balanced, informed; capital-growth + income; SG"),
     (
         "client-000077",
         "Conservative, retail; capital-preservation + income; ESG-only, no-illiquid; SG",
     ),
+    ("client-000418", "Aggressive, informed; capital-growth; real-assets heavy; SG"),
 ]
 # The verified principal the demo acts as: a same-tenant (demo-bank) RM entitled to the
 # seeded clients. Object authorization (domain/entitlements.py) is enforced against it.
@@ -80,6 +92,7 @@ def _summarise_point(tp: Any) -> dict:
             else None
         ),
         "citations": [to_jsonable(c) for c in tp.citations],
+        "alignment": to_jsonable(tp.alignment) if tp.alignment is not None else None,
     }
 
 
@@ -92,6 +105,8 @@ def _summarise_client(svc: Any, client_id: str, descriptor: str) -> dict:
         "not_advice_disclaimer": briefing.not_advice_disclaimer,
         "talking_points": [_summarise_point(tp) for tp in briefing.talking_points],
         "alignment": to_jsonable(briefing.alignment),
+        "portfolio_summary": to_jsonable(briefing.portfolio_summary),
+        "house_views_considered": to_jsonable(briefing.alignment.theme_links),
         "generated_at": briefing.generated_at.isoformat(),
     }
 
@@ -128,13 +143,43 @@ def _print_summary(payload: dict) -> None:
             verdict = a["verdict"] if a else "n/a"
             cites = ", ".join(c["source_id"] for c in tp["citations"]) or "none"
             print(f"   {i}. [{verdict.upper():10}] {tp['headline']}  <- {cites}")
+        summary = client.get("portfolio_summary") or {}
+        gaps = summary.get("allocation_gaps") or []
+        if gaps:
+            currency = summary.get("currency", "USD")
+            print(
+                f"   portfolio: {summary.get('total_value', 0):,.0f} {currency} "
+                f"vs {(summary.get('model_portfolio') or {}).get('model_id', 'no model')}"
+            )
+            for gap in gaps:
+                if gap["status"] == "in_range":
+                    detail = "in range"
+                else:
+                    short = gap["status"] == "under"
+                    money = abs(gap["target_weight"] - gap["current_weight"]) * gap["total_value"]
+                    detail = (
+                        f"{'UNDER' if short else 'OVER '} by "
+                        f"{abs(gap['current_weight'] - gap['target_weight']):.0%} "
+                        f"({money:,.0f} {'to add' if short else 'above target'})"
+                    )
+                print(
+                    f"      {gap['asset_class']:14} holds {gap['current_weight']:>4.0%}  "
+                    f"target {gap['target_weight']:>4.0%}  {detail}"
+                )
         align = client["alignment"]
         print(
             "   alignment: "
             f"in-line={', '.join(align['themes_in_line']) or 'none'} | "
             f"gaps={', '.join(align['gaps']) or 'none'} | "
-            f"overweights={', '.join(align['overweights']) or 'none'}\n"
+            f"overweights={', '.join(align['overweights']) or 'none'}"
         )
+        if align.get("uncovered_gaps"):
+            print(
+                "   not covered by this report: "
+                + ", ".join(align["uncovered_gaps"])
+                + "  (the briefing says so rather than inventing a theme)"
+            )
+        print()
 
 
 def main(out_path: str) -> None:
