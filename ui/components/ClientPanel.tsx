@@ -3,49 +3,58 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CLIENT_TEMPLATE_URL, listClients, registerClient } from "@/lib/api";
+import { CLIENT_TEMPLATE_URL, listClientSummaries, registerClient } from "@/lib/api";
+import type { ClientSummary } from "@/lib/types";
 import { Pill } from "./ui";
-
-// The clients the shipped demo book serves, all fictional and all opaque ids.
-// tests/contract/test_demo_book.py fails the build when this list names one the server does
-// not have: it used to offer client-000113 and client-000201 against a two-client seed, so
-// picking either errored in front of whoever was watching.
-const SAMPLE_CLIENTS = [
-  { id: "client-000042", label: "Balanced, growth + income" },
-  { id: "client-000077", label: "Conservative, preservation, ESG-only" },
-  { id: "client-000113", label: "Aggressive, professional" },
-  { id: "client-000201", label: "Balanced, ESG-only" },
-  { id: "client-000305", label: "Conservative, income, HK" },
-  { id: "client-000418", label: "Aggressive, growth" },
-];
 
 export function ClientPanel({
   onRun,
+  onSelect,
   loading,
   health,
 }: {
   onRun: (clientId: string) => void;
+  onSelect?: (clientId: string) => void;
   loading: boolean;
   health: { ok: boolean; profile?: string; region?: string };
 }) {
-  const [clientId, setClientId] = useState(SAMPLE_CLIENTS[0].id);
-  const [registered, setRegistered] = useState<string[]>([]);
+  const [clientId, setClientId] = useState("");
+  // The picker's contents come from the SERVER, never from a list in this file. It used to
+  // carry four hardcoded clients, two of which the server did not serve at all, so picking
+  // either one errored in front of whoever was watching. The label is derived server-side
+  // from the profile for the same reason.
+  const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [book, setBook] = useState<{ version: string; fictional: boolean }>({
+    version: "",
+    fictional: false,
+  });
   const [uploadNote, setUploadNote] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Under live the fictional sample clients do not exist server-side: the picker shows
-  // audience-registered clients instead (empty until the first registration).
-  const isLive = health.profile === "live";
+
+  function choose(id: string) {
+    setClientId(id);
+    onSelect?.(id);
+  }
 
   useEffect(() => {
     if (!health.ok) return;
-    listClients()
-      .then((ids) => {
-        setRegistered(ids);
-        if (isLive && ids.length > 0) setClientId(ids[0]);
-        else if (isLive) setClientId("");
+    listClientSummaries()
+      .then((list) => {
+        setClients(list.items);
+        setBook({ version: list.book_version, fictional: list.fictional });
+        if (list.items.length > 0) {
+          setClientId((current) => {
+            if (current) return current;
+            onSelect?.(list.items[0].client_id);
+            return list.items[0].client_id;
+          });
+        }
       })
-      .catch(() => setRegistered([]));
-  }, [health.ok, isLive]);
+      .catch(() => setClients([]));
+    // onSelect is a stable useCallback in the page; re-running on identity would refetch
+    // the picker on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [health.ok]);
 
   async function onUpload() {
     const file = fileRef.current?.files?.[0];
@@ -58,8 +67,8 @@ export function ClientPanel({
         ok: true,
         text: `Registered ${result.client_id} (${result.holdings} holdings)`,
       });
-      setClientId(result.client_id);
-      setRegistered(await listClients());
+      choose(result.client_id);
+      setClients((await listClientSummaries()).items);
     } catch (e) {
       setUploadNote({ ok: false, text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -67,9 +76,6 @@ export function ClientPanel({
     }
   }
 
-  const picker = isLive
-    ? registered.map((id) => ({ id, label: "registered" }))
-    : SAMPLE_CLIENTS;
 
   return (
     <aside className="w-full space-y-4 lg:w-72">
@@ -91,30 +97,40 @@ export function ClientPanel({
         </label>
         <input
           value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
+          onChange={(e) => choose(e.target.value)}
           className="mt-1 w-full rounded-md border border-ink-200 px-2 py-1.5 font-mono text-sm"
           placeholder="client-000042"
         />
         <p className="mt-1 text-[11px] text-ink-400">Opaque reference only, never PII.</p>
 
         <ul className="mt-3 space-y-1">
-          {picker.map((c) => (
-            <li key={c.id}>
+          {clients.map((c) => (
+            <li key={c.client_id}>
               <button
                 type="button"
-                onClick={() => setClientId(c.id)}
+                onClick={() => choose(c.client_id)}
                 className={`w-full rounded-md px-2 py-1 text-left text-xs ${
-                  c.id === clientId
+                  c.client_id === clientId
                     ? "bg-regblue-100 text-regblue-800"
                     : "text-ink-600 hover:bg-ink-50"
                 }`}
               >
-                <span className="font-mono">{c.id}</span>
-                <span className="ml-1 text-ink-400">{c.label}</span>
+                <span className="font-mono">{c.client_id}</span>
+                {c.label ? <span className="ml-1 text-ink-400">{c.label}</span> : null}
               </button>
             </li>
           ))}
+          {clients.length === 0 ? (
+            <li className="px-2 py-1 text-xs text-ink-400">
+              No clients yet. Register one below.
+            </li>
+          ) : null}
         </ul>
+        {book.fictional ? (
+          <p className="mt-2 text-[11px] text-ink-400">
+            Fictional demo book {book.version}. No real client is represented here.
+          </p>
+        ) : null}
 
         <button
           type="button"

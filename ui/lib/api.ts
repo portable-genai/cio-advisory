@@ -19,7 +19,9 @@
 
 import type {
   AdvisoryBriefing,
+  ClientList,
   HealthResponse,
+  PortfolioSummary,
   SuitabilityAssessment,
   TalkingPointsResponse,
 } from "./types";
@@ -250,15 +252,49 @@ export async function registerClient(
   return raw as ClientRegistration;
 }
 
-/** The client ids registered for the caller's tenant (live profile picker). */
+/** The client ids visible to the caller's tenant. */
 export async function listClients(signal?: AbortSignal): Promise<string[]> {
+  return (await listClientSummaries(signal)).clients;
+}
+
+/**
+ * The clients visible to the caller's tenant, with their server-derived labels.
+ *
+ * The picker reads this rather than a list in the console's own source. It used to carry
+ * four hardcoded clients, two of which the server did not serve, so picking either errored.
+ */
+export async function listClientSummaries(signal?: AbortSignal): Promise<ClientList> {
   const res = await fetch(`${API_BASE}/v1/clients`, {
     method: "GET",
     headers: requestHeaders(),
     signal: withTimeout(signal, 8_000),
   });
-  const raw = (await parseJsonOrThrow(res)) as { clients?: string[] };
-  return raw?.clients ?? [];
+  const raw = (await parseJsonOrThrow(res)) as Partial<ClientList>;
+  return {
+    clients: raw?.clients ?? [],
+    items: raw?.items ?? [],
+    book_version: raw?.book_version ?? "",
+    fictional: Boolean(raw?.fictional),
+  };
+}
+
+/**
+ * The client's holdings against their risk profile's model portfolio.
+ *
+ * Calls no model and retrieves nothing, so the console shows the before-picture the moment a
+ * client is picked rather than only after a briefing has been built.
+ */
+export async function clientPortfolio(
+  clientId: string,
+  signal?: AbortSignal,
+): Promise<PortfolioSummary> {
+  const res = await fetch(
+    `${API_BASE}/v1/clients/${encodeURIComponent(clientId)}/portfolio`,
+    { method: "GET", headers: requestHeaders(), signal: withTimeout(signal, 8_000) },
+  );
+  const raw = await parseJsonOrThrow(res);
+  rejectEnvelope(raw);
+  return raw as PortfolioSummary;
 }
 
 export const api = {
@@ -268,5 +304,7 @@ export const api = {
   healthz,
   listPersonas,
   registerClient,
+  listClientSummaries,
+  clientPortfolio,
   listClients,
 };

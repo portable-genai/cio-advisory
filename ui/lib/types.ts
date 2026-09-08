@@ -29,6 +29,33 @@ export type SuitabilityVerdict = "suitable" | "review" | "unsuitable";
 
 export type SourceType = "house_view" | "portfolio";
 
+/** What a CIO theme is to a portfolio. Derived from the stance by the server, never here. */
+export type ThemeSignal = "opportunity" | "threat" | "watch";
+
+/** Where one asset class sits against the model portfolio's published band. */
+export type GapStatus = "under" | "in_range" | "over";
+
+export const SIGNAL_LABEL: Record<ThemeSignal, string> = {
+  opportunity: "Opportunity",
+  threat: "Threat",
+  watch: "Watch",
+};
+
+export const GAP_STATUS_LABEL: Record<GapStatus, string> = {
+  under: "Under",
+  in_range: "In range",
+  over: "Over",
+};
+
+export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
+  equity: "Equity",
+  fixed_income: "Fixed income",
+  cash: "Cash",
+  alternatives: "Alternatives",
+  real_assets: "Real assets",
+  multi_asset: "Multi-asset",
+};
+
 export const VERDICT_LABEL: Record<SuitabilityVerdict, string> = {
   suitable: "Suitable",
   review: "Review",
@@ -77,21 +104,106 @@ export interface TalkingPoint {
   suitability: SuitabilityAssessment | null;
   citations: Citation[];
   is_advice: boolean;
+  alignment: ThemeAlignment | null;
+}
+
+/**
+ * One asset class against its band. Every figure here is computed server-side, including
+ * `drift` and `value_gap`: the console renders them and never recomputes them, so the number
+ * on screen is the number the engine used and a reviewer replays one calculation, not two.
+ */
+export interface AllocationGap {
+  asset_class: AssetClass;
+  current_weight: number;
+  target_weight: number;
+  min_weight: number;
+  max_weight: number;
+  status: GapStatus;
+  current_value: number;
+  total_value: number;
+  drift: number;
+  value_gap: number;
+}
+
+export interface AllocationTarget {
+  asset_class: AssetClass;
+  target_weight: number;
+  min_weight: number;
+  max_weight: number;
+}
+
+export interface ModelPortfolio {
+  model_id: string;
+  risk_appetite: RiskAppetite;
+  jurisdiction: string;
+  effective_from: string;
+  source: string;
+  targets: AllocationTarget[];
+}
+
+export interface HoldingOut {
+  instrument: string;
+  instrument_id: string;
+  asset_class: AssetClass;
+  value: number;
+  weight: number;
+  currency: string;
+  tags: string[];
+}
+
+export interface PortfolioSummary {
+  client_id: string;
+  risk_appetite: RiskAppetite;
+  total_value: number;
+  currency: string;
+  holdings: HoldingOut[];
+  allocation_gaps: AllocationGap[];
+  model_portfolio: ModelPortfolio | null;
+}
+
+export interface ThemeAlignment {
+  theme: string;
+  signal: ThemeSignal;
+  asset_class: AssetClass;
+  status: GapStatus;
+  addresses: AllocationGap | null;
+  exposure: AllocationGap | null;
+  related_holdings: string[];
+  citation: Citation | null;
 }
 
 export interface PortfolioAlignment {
   themes_in_line: string[];
   gaps: string[];
   overweights: string[];
+  theme_links: ThemeAlignment[];
+  allocation_gaps: AllocationGap[];
+  uncovered_gaps: string[];
 }
 
 export interface AdvisoryBriefing {
   client_id: string;
   talking_points: TalkingPoint[];
   alignment: PortfolioAlignment;
+  portfolio_summary: PortfolioSummary | null;
+  house_views_considered: ThemeAlignment[];
   not_advice_disclaimer: string;
   requires_human_review: boolean;
   generated_at: string;
+}
+
+/** One client in the picker. The label is derived server-side from the profile. */
+export interface ClientSummary {
+  client_id: string;
+  label: string;
+  risk_appetite: RiskAppetite | "";
+}
+
+export interface ClientList {
+  clients: string[];
+  items: ClientSummary[];
+  book_version: string;
+  fictional: boolean;
 }
 
 export interface TalkingPointsResponse {

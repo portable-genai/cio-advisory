@@ -14,16 +14,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BriefingView } from "@/components/BriefingView";
+import { PortfolioSummaryPanel } from "@/components/PortfolioSummaryPanel";
 import { ClientPanel } from "@/components/ClientPanel";
 import { ErrorNote, Panel } from "@/components/ui";
 import { ApiError, api, setDevPersona } from "@/lib/api";
 import type { Persona } from "@/lib/api";
-import type { AdvisoryBriefing } from "@/lib/types";
+import type { AdvisoryBriefing, PortfolioSummary } from "@/lib/types";
 
 const IS_EMBEDDED = process.env.NEXT_PUBLIC_EMBED === "1";
 
 export default function Home() {
   const [briefing, setBriefing] = useState<AdvisoryBriefing | null>(null);
+  // The before-picture. Loaded when a client is PICKED, not when a briefing is built: the
+  // gaps are arithmetic over the holdings and the published allocation, so there is no
+  // reason to make a reader wait for a model to see what their client actually holds.
+  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<{
@@ -63,6 +68,20 @@ export default function Home() {
     setDevPersona(id);
   }
 
+  const select = useCallback(async (clientId: string) => {
+    setBriefing(null);
+    setError(null);
+    setSummary(null);
+    if (!clientId.trim()) return;
+    try {
+      setSummary(await api.clientPortfolio(clientId.trim()));
+    } catch {
+      // A client with no portfolio yet is a normal state, not an error worth a banner:
+      // the panel simply does not render and the briefing button still works.
+      setSummary(null);
+    }
+  }, []);
+
   const run = useCallback(async (clientId: string) => {
     setLoading(true);
     setError(null);
@@ -87,7 +106,7 @@ export default function Home() {
           : "mx-auto flex max-w-6xl flex-col gap-6 p-6 lg:flex-row"
       }
     >
-      <ClientPanel onRun={run} loading={loading} health={health} />
+      <ClientPanel onRun={run} onSelect={select} loading={loading} health={health} />
 
       <div className="min-w-0 flex-1 space-y-4">
         {!IS_EMBEDDED && personas.length > 0 && (
@@ -110,9 +129,19 @@ export default function Home() {
         )}
 
         {error && <ErrorNote message={error} />}
-        {!error && !briefing && !loading && (
+
+        {/* Before any briefing: what the client holds against what their profile calls for.
+            This is the panel that makes the recommendations mean something, and it needs no
+            model to render, so it is on screen while the briefing is still being built. */}
+        {!briefing && summary && (
+          <Panel title="Portfolio against the client's risk profile">
+            <PortfolioSummaryPanel summary={summary} />
+          </Panel>
+        )}
+
+        {!error && !briefing && !summary && !loading && (
           <div className="rounded-xl border border-dashed border-ink-200 bg-white p-10 text-center text-sm text-ink-400">
-            Pick a client and build a briefing to see suitability-checked talking points.
+            Pick a client to see their portfolio, then build a briefing.
           </div>
         )}
         {loading && (

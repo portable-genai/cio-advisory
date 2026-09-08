@@ -51,7 +51,9 @@ from .schemas import (
     ClientRegistrationRequest,
     ClientRegistrationResponse,
     ClientRequest,
+    ClientSummaryModel,
     HealthResponse,
+    PortfolioSummaryModel,
     SuitabilityAssessmentModel,
     SuitabilityRequest,
     TalkingPointsResponse,
@@ -327,13 +329,112 @@ def client_template() -> Response:
     )
 
 
+def _client_label(profile: Any) -> str:
+    """A short, PII-free description of a client, derived from the profile the server holds.
+
+    Never a stored string and never one the console writes: the picker used to carry its own
+    hardcoded labels for four clients, and two of those clients did not exist server-side at
+    all. Deriving it here means the picker cannot describe a client the book does not have.
+    """
+    parts = [str(profile.risk_appetite.value)]
+    if profile.objectives:
+        parts.append(", ".join(profile.objectives))
+    if profile.constraints:
+        parts.append(", ".join(profile.constraints))
+    return "; ".join(parts)
+
+
 @app.get("/v1/clients", response_model=ClientListResponse, tags=["clients"])
 def list_clients(principal: CurrentPrincipal) -> ClientListResponse:
-    """The registered client ids owned by the caller's tenant (for the UI picker)."""
+    """The client ids owned by the caller's tenant, with server-derived labels."""
     portfolio = deps.get_container().portfolio
     lister = getattr(portfolio, "client_ids", None)
     ids: list[str] = list(lister(principal.tenant)) if lister is not None else []
-    return ClientListResponse(clients=ids)
+    items: list[ClientSummaryModel] = []
+    for client_id in ids:
+        try:
+            profile = portfolio.get_profile(client_id)
+        except Exception:  # noqa: BLE001 - a client the picker cannot describe still lists
+            items.append(ClientSummaryModel(client_id=client_id))
+            continue
+        items.append(
+            ClientSummaryModel(
+                client_id=client_id,
+                label=_client_label(profile),
+                risk_appetite=profile.risk_appetite.value,
+            )
+        )
+    book = _book_manifest()
+    return ClientListResponse(
+        clients=ids,
+        items=items,
+        book_version=str(book.get("book_version", "")),
+        fictional=bool(book.get("fictional", False)),
+    )
+
+
+def _book_manifest() -> dict[str, Any]:
+    """What the store says about itself, so the console can label a fictional book as one.
+
+    Best-effort: a deployment reading a real client book has no shipped manifest to report,
+    and the console then simply shows no label rather than claiming the book is fictional.
+    """
+    try:
+        from .. import demo_book
+
+        return demo_book.manifest()
+    except Exception:  # noqa: BLE001 - a missing manifest is a missing label, not an error
+        return {}
+
+
+@app.get(
+    "/v1/clients/{client_id}/portfolio",
+    response_model=PortfolioSummaryModel,
+    tags=["clients"],
+)
+def client_portfolio(
+    client_id: str,
+    principal: CurrentPrincipal,
+) -> PortfolioSummaryModel | JSONResponse:
+    """The client's holdings against their risk profile's model portfolio.
+
+    The before-picture, available WITHOUT generating anything: the gaps are arithmetic over
+    the holdings and the published allocation, so the console shows them the moment a client
+    is picked rather than after a briefing has been built. No model is called and nothing is
+    retrieved, which is also why this route is cheap enough to hang off a picker click.
+
+    Object authorization is the same gate the briefing runs: a principal not entitled to this
+    client gets a 403 here too, because a portfolio is exactly the customer data the gate
+    exists to protect.
+    """
+    from ..domain import gap_analysis as ga
+    from ..domain.entitlements import assert_may_access_client
+    from ..domain.errors import ClientAccessDeniedError
+
+    container = deps.get_container()
+    portfolio_port = container.portfolio
+    try:
+        profile = portfolio_port.get_profile(client_id)
+    except NotImplementedError:
+        return _unavailable_response(client_id, "this profile serves no portfolio store")
+    except Exception:  # noqa: BLE001 - an unknown client is not a server error
+        return _unavailable_response(client_id, "no profile for this client")
+    try:
+        assert_may_access_client(principal, profile)
+    except ClientAccessDeniedError as exc:
+        return _denied_response(exc)
+    try:
+        holdings = portfolio_port.get_portfolio(client_id)
+    except Exception:  # noqa: BLE001
+        return _unavailable_response(client_id, "no holdings for this client")
+    getter = getattr(portfolio_port, "get_model_portfolio", None)
+    model = None
+    if getter is not None:
+        try:
+            model = getter(profile.risk_appetite, profile.jurisdiction)
+        except Exception:  # noqa: BLE001 - an unpublished allocation is not a failure
+            model = None
+    return PortfolioSummaryModel.from_domain(ga.summarise(holdings, model, profile.risk_appetite))
 
 
 @app.post(
