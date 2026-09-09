@@ -108,8 +108,40 @@ def test_the_profile_table_declares_the_tenant_column_the_gate_reads() -> None:
     assert "tenant" in _terraform_tables()["client_profiles"]
 
 
-def test_the_terraform_declares_every_table_the_book_ships() -> None:
-    assert set(demo_book.TABLES) <= set(_terraform_tables())
+def test_the_book_and_the_terraform_declare_the_same_columns() -> None:
+    """The check this repository could not make until the book moved onto the kit.
+
+    It used to assert that every table the book ships EXISTS in the Terraform, and could go no
+    further: the book declared table names and nothing about their columns, so the three
+    sibling repositories that had been migrated to ``hex_service_kit.demobook`` could hold
+    their book's columns against the schema and the repository that shipped the pattern first
+    could not. A book carrying a column the schema lacks is a load that fails on its first
+    row; a schema carrying one the book lacks is a column nothing fills.
+
+    The set held is ``load_order()`` rather than ``TABLES``: the loader writes one more table
+    than this repository declares, the manifest, because it records the load that wrote the
+    others. Iterating the wrong set is what hid a missing manifest in a sibling repository
+    from three green gates.
+    """
+    declared = _terraform_tables()
+    for table in demo_book.BOOK.load_order():
+        assert table.name in declared, f"the book ships {table.name} and Terraform does not"
+        book_columns, tf_columns = sorted(table.columns), sorted(declared[table.name])
+        assert book_columns == tf_columns, (
+            f"{table.name}: book {book_columns} vs terraform {tf_columns}"
+        )
+
+
+def test_the_house_view_corpus_is_not_a_warehouse_table() -> None:
+    """It is a File Search corpus, and it must never reach the loader's table set.
+
+    Keeping it in the same book would put it in ``load_order()`` and hand the warehouse loader
+    a table no dataset has, which is a load that exits before its first row. It also must
+    never seed under ``live``: what may not enter a live briefing is the EVIDENCE, and a house
+    view is what a talking point cites.
+    """
+    assert demo_book.HOUSE_VIEWS.name not in {t.name for t in demo_book.BOOK.load_order()}
+    assert demo_book.house_view_rows(), "the corpus book reads nothing"
 
 
 # --------------------------------------------------------------------------- #
