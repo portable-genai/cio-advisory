@@ -17,12 +17,12 @@ import pytest
 from agent_eval_kit import assert_can_go_red
 from eval.run_eval import (
     DEFAULT_DATASET,
-    THRESHOLDS,
     GoldenExample,
     _build_adapters,
     _make_service,
     brief_example,
     load_golden,
+    load_thresholds_from_rubrics,
     score_citation_accuracy,
     score_gap_coverage,
     score_groundedness,
@@ -32,6 +32,12 @@ from eval.run_eval import (
 )
 
 from cio_advisory.domain.models import AdvisoryBriefing, SuitabilityVerdict
+
+#: The reviewed bars, read from `eval/rubrics/*.yaml` exactly as the gate reads them. The
+#: module-level dict this used to import is gone: a threshold written as a Python literal
+#: carries no argument, and having both was two homes for one number.
+THRESHOLDS = load_thresholds_from_rubrics()
+
 
 _GOLDEN = load_golden(DEFAULT_DATASET)
 #: An example with verdicts to get right, so suitability_accuracy scores something real.
@@ -164,3 +170,62 @@ def _has_addressable_gap(example: GoldenExample) -> bool:
         p.alignment is not None and p.alignment.addresses is not None
         for p in produced.talking_points
     )
+
+
+# --------------------------------------------------------------------------- #
+# Retrieval quality: the metrics that can see a knowledge base going quiet
+# --------------------------------------------------------------------------- #
+def test_the_retrieval_metrics_can_go_red() -> None:
+    """Run the SHIPPED proof, the same one the scored run executes before it scores.
+
+    Two directions, and only one of them is obvious. A retriever that returns nothing loses
+    recall; a retriever that returns everything GAINS recall and loses precision, which is
+    exactly how a knowledge base is "fixed" after a recall complaint.
+    """
+    from eval.run_eval import load_thresholds_from_rubrics, prove_retrieval_metrics_can_go_red
+
+    prove_retrieval_metrics_can_go_red(load_thresholds_from_rubrics())
+
+
+def test_the_labelled_queries_are_scored_against_the_real_retriever() -> None:
+    """Not a fake keyed off the case, which would make recall 1.0 by construction.
+
+    The fake house-view adapter the rest of this gate uses returns exactly the views the golden
+    case declares, so scoring retrieval through it would be a tautology with a threshold. These
+    metrics go through `LocalFtsHouseViewAdapter`, the SQLite FTS5 index the offline briefing
+    path actually queries, and its top-k carries real noise.
+    """
+    from eval.run_eval import score_retrieval_quality
+
+    scores = score_retrieval_quality()
+    assert scores.n_queries >= 10, "too few labelled queries to say anything about recall"
+    assert scores.n_relevant >= 10, "too few labelled positives to express a recall bar"
+    # Precision is well below 1.0 because most queries have one right answer and the cut is
+    # five. If this ever reads 1.0 the retriever has stopped returning anything but the answer,
+    # which would mean the index, not the metric, has changed shape.
+    assert 0.0 < scores.precision_at_k < 1.0
+
+
+def test_the_retrieval_index_does_not_depend_on_the_developer_s_home_directory() -> None:
+    """A gate whose result depends on `$HOME` is not a gate.
+
+    The adapter's default is a SQLite file under the running user's home directory that
+    self-seeds once and then persists. On the machine this was written on that file still held
+    a previous quarter's four house views, and every labelled query scored zero against a
+    retriever that was in fact working.
+    """
+    from eval.run_eval import _retrieval_index
+
+    index = _retrieval_index()
+    assert index._db_path == ":memory:"
+
+
+def test_every_scored_metric_has_a_reviewed_bar_and_every_bar_is_scored() -> None:
+    """Both directions. The second is the one nobody writes by hand, and the one that rots."""
+    from agent_eval_kit import load_rubrics
+    from agent_eval_kit.rubrics import RubricError
+    from eval.run_eval import RUBRICS, SCORED
+
+    load_rubrics(RUBRICS).assert_covers(SCORED)
+    with pytest.raises(RubricError, match="reads as governance"):
+        load_rubrics(RUBRICS).assert_covers(SCORED[:-1])

@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,7 +48,16 @@ from pathlib import Path
 # The --mode smoke|gate scaffold + aligned report rendering come from the shared
 # agent-eval-kit commons; this script keeps only its own offline
 # evaluator and gate runner.
-from agent_eval_kit import eval_main
+from agent_eval_kit import (
+    assert_can_go_red,
+    assert_denominator_supports,
+    dataset_digest,
+    eval_main,
+    load_jsonl,
+    load_rubrics,
+    prove_before_scoring,
+)
+from agent_eval_kit.retrieval import RetrievalCase, RetrievalScores, score_retrieval
 
 # The pii_safety gate runs the REAL local redactor (not a fake) over the SAME shared pii-kit
 # rows the runtime uses, and scores the leak-check two independent ways: pack_leak (the same
@@ -63,6 +72,7 @@ from pii_kit import (
 )
 from pii_kit.patterns import Pattern
 
+from cio_advisory.adapters.local.house_views import LocalFtsHouseViewAdapter
 from cio_advisory.adapters.local.redaction import LocalRegexRedactionAdapter
 from cio_advisory.config import PiiSettings, Settings
 from cio_advisory.domain.models import (
@@ -91,16 +101,18 @@ from cio_advisory.envread import read_env_setting
 # --------------------------------------------------------------------------- #
 # Thresholds : the promotion bar (SPEC A4 / P-08). Mirrors eval/rubrics/*.yaml.
 # --------------------------------------------------------------------------- #
-THRESHOLDS: dict[str, float] = {
-    "groundedness": 0.80,
-    "suitability_accuracy": 0.85,
-    "citation_accuracy": 0.90,
-    "no_advice_safety": 0.99,
-    "pii_safety": 0.99,
-    "gap_coverage": 0.90,
-}
+#: Where every bar lives. Not a dict here: a threshold written as a Python literal carries no
+#: argument, so a reviewer can read that suitability must clear 0.85 and cannot read why, who
+#: agreed it, or what moving it would mean. The rubric files carry the reasoning beside the
+#: number, and `agent_eval_kit.load_rubrics` reads them.
+#:
+#: What was here before was BOTH: a `THRESHOLDS` dict and a loader that overlaid two rubric
+#: files on top of it, falling back to the dict when PyYAML was missing. Two homes for one
+#: number, with a silent path that used the one nobody reviews. PyYAML is a hard dependency of
+#: this service, so there is no case to fall back for.
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+RUBRICS = _REPO_ROOT / "eval" / "rubrics"
 DEFAULT_DATASET = _REPO_ROOT / "eval" / "datasets" / "golden_clients.jsonl"
 
 
@@ -318,26 +330,46 @@ def load_golden(path: Path) -> list[GoldenExample]:
 
 
 def load_thresholds_from_rubrics() -> dict[str, float]:
-    """Read thresholds from ``eval/rubrics/*.yaml`` when PyYAML is available."""
-    thresholds = dict(THRESHOLDS)
-    try:
-        import yaml  # type: ignore[import-untyped]
-    except ImportError:
-        return thresholds
+    """Read every metric's reviewed bar out of ``eval/rubrics/*.yaml``. No fallback, by design.
 
-    rubric_dir = _REPO_ROOT / "eval" / "rubrics"
-    for name in ("groundedness.yaml", "suitability_accuracy.yaml"):
-        rubric_path = rubric_dir / name
-        if not rubric_path.exists():
-            continue
-        doc = yaml.safe_load(rubric_path.read_text(encoding="utf-8")) or {}
-        metric = doc.get("metric")
-        if isinstance(metric, str) and "threshold" in doc:
-            thresholds[metric] = float(doc["threshold"])
-        for companion, spec in (doc.get("companion_metrics") or {}).items():
-            if isinstance(spec, dict) and "threshold" in spec:
-                thresholds[str(companion)] = float(spec["threshold"])
-    return thresholds
+    Fails closed on a missing directory, a non-numeric bar, or the same metric given two
+    different bars in two files. There is deliberately no fallback to a module dict: a fallback
+    is a second home for a number that must have one, and it is reached exactly when the
+    reviewed file could not be read, which is the worst moment to stop using it.
+    """
+    return load_rubrics(RUBRICS).thresholds()
+
+
+#: The metrics this runner scores, in report order. Named so `assert_covers` can compare them
+#: with the rubric set in BOTH directions: a metric with no reviewed bar got its threshold from
+#: a call site, and a bar that names no metric reads as governance while gating nothing.
+SCORED: tuple[str, ...] = (
+    "groundedness",
+    "suitability_accuracy",
+    "citation_accuracy",
+    "no_advice_safety",
+    "pii_safety",
+    "gap_coverage",
+    "retrieval_recall_at_5",
+    "retrieval_precision_at_5",
+    "retrieval_mrr",
+)
+
+#: What each RATE metric's score is a fraction OF. The distinction matters and the aggregate
+#: case count is the wrong answer for most of them: `suitability_accuracy` is a fraction over
+#: expected VERDICTS, of which six clients carry forty-eight, so its 0.85 bar is expressible;
+#: `gap_coverage` was a fraction over five hand-written gaps, so its 0.90 bar was arithmetically
+#: 1.0 and now says 1.0. A metric absent from this map is declared `all-or-nothing` in its
+#: rubric: its bar asks for no headroom, so a bigger corpus would not change what it means.
+RATE_DENOMINATORS: dict[str, Callable[[list[GoldenExample]], int]] = {
+    "suitability_accuracy": lambda examples: sum(len(e.expected_verdicts) for e in examples),
+    "gap_coverage": lambda examples: sum(len(e.expected_addressed_gaps) for e in examples),
+}
+
+#: The top-k the retrieval metrics are cut at. Five over an eight-view corpus, which is the
+#: number a briefing actually builds from: a house view outside the cut is not evidence.
+RETRIEVAL_K = 5
+RETRIEVAL_QUERIES = _REPO_ROOT / "eval" / "datasets" / "retrieval_queries.jsonl"
 
 
 # --------------------------------------------------------------------------- #
@@ -709,12 +741,112 @@ def score_pii_safety(
     return 0.0 if leaked else 1.0
 
 
+def _retrieval_index() -> LocalFtsHouseViewAdapter:
+    """The REAL house-view retriever, over an in-memory index seeded from the shipped corpus.
+
+    In memory, and deliberately: the adapter's default path is a SQLite file under the running
+    user's home directory, which self-seeds once and then persists. A gate that read it would
+    score whichever corpus that developer's machine happened to have indexed first, and this is
+    not hypothetical: on the machine this was written on, that file still held a previous
+    quarter's four house views, and every labelled query scored zero against a retriever that
+    is in fact working. A gate whose result depends on `$HOME` is not a gate.
+    """
+    import dataclasses
+
+    from cio_advisory.config import Settings
+
+    base = Settings.load()
+    return LocalFtsHouseViewAdapter(
+        dataclasses.replace(base, local=dataclasses.replace(base.local, db_path=":memory:"))
+    )
+
+
+def retrieval_cases(retrieve: Callable[[str, int], list[str]]) -> list[RetrievalCase]:
+    """The labelled query set, resolved through ``retrieve``. The labels are a REVIEWER's.
+
+    ``relevant`` is never derived from what the retriever returned: a label taken from the
+    component under test agrees with it by construction and measures nothing.
+    """
+    cases: list[RetrievalCase] = []
+    for row in load_jsonl(RETRIEVAL_QUERIES, required=("id", "query", "relevant")):
+        cases.append(
+            RetrievalCase(
+                query=str(row["id"]),
+                retrieved=tuple(retrieve(str(row["query"]), RETRIEVAL_K)),
+                relevant=tuple(str(item) for item in row["relevant"]),
+            )
+        )
+    return cases
+
+
+def score_retrieval_quality(
+    retrieve: Callable[[str, int], list[str]] | None = None,
+) -> RetrievalScores:
+    """recall@k, precision@k and MRR over the labelled query set, upstream of generation."""
+    if retrieve is None:
+        index = _retrieval_index()
+
+        def retrieve(query: str, k: int) -> list[str]:  # noqa: F811 - the default binding
+            return [view.citation.source_id for view in index.retrieve(query, top_k=k)]
+
+    return score_retrieval(retrieval_cases(retrieve), k=RETRIEVAL_K)
+
+
+def prove_retrieval_metrics_can_go_red(thresholds: dict[str, float]) -> None:
+    """A retriever that finds nothing, and one that pads its results, must both score red.
+
+    The two directions fail differently and only one of them is obvious. A retriever that
+    returns nothing loses recall; a retriever that returns everything GAINS recall and loses
+    precision, which is exactly how a knowledge base is "fixed" after a recall complaint.
+    """
+    corpus = tuple(view.citation.source_id for view in _retrieval_index().retrieve("", top_k=50))
+    working = score_retrieval_quality()
+
+    def _blind(_query: str, _k: int) -> list[str]:
+        return []
+
+    def _padding(_query: str, k: int) -> list[str]:
+        # Everything in the corpus, in a fixed order: recall goes up, precision collapses.
+        return list(corpus)[:k]
+
+    assert_can_go_red(
+        lambda scores: scores.recall_at_k,
+        green=working,
+        red=score_retrieval_quality(_blind),
+        threshold=thresholds["retrieval_recall_at_5"],
+        metric="retrieval_recall_at_5",
+    )
+    assert_can_go_red(
+        lambda scores: scores.precision_at_k,
+        green=working,
+        red=score_retrieval_quality(_padding),
+        threshold=thresholds["retrieval_precision_at_5"],
+        metric="retrieval_precision_at_5",
+    )
+    assert_can_go_red(
+        lambda scores: scores.mean_reciprocal_rank,
+        green=working,
+        red=score_retrieval_quality(_blind),
+        threshold=thresholds["retrieval_mrr"],
+        metric="retrieval_mrr",
+    )
+
+
 def run_offline(dataset: Path, thresholds: dict[str, float]) -> EvalReport:
+    # The rubrics and the scored set must agree in BOTH directions before anything is scored.
+    load_rubrics(RUBRICS).assert_covers(SCORED)
+    # And the retrieval metrics must be shown able to go red, here, with these thresholds.
+    prove_before_scoring(lambda: prove_retrieval_metrics_can_go_red(thresholds))
     examples = load_golden(dataset)
+    # And the corpus must be able to express every bar that claims a rate. One in this
+    # repository could not, and was silently identical to 1.0; it now says 1.0.
+    for metric, denominator in RATE_DENOMINATORS.items():
+        assert_denominator_supports(thresholds[metric], denominator(examples), metric=metric)
     adapters = _build_adapters(examples)
     service = _make_service(adapters)
 
-    agg: dict[str, _PerMetric] = {m: _PerMetric() for m in THRESHOLDS}
+    agg: dict[str, _PerMetric] = {metric: _PerMetric() for metric in SCORED}
+    produced: dict[str, int] = {"talking_points": 0, "citations": 0}
     print(f"Running offline eval gate over {len(examples)} golden examples (AdvisoryService).\n")
     for example in examples:
         # The adapters (and so the in-memory audit sink) are shared across the run, so slice
@@ -729,25 +861,47 @@ def run_offline(dataset: Path, thresholds: dict[str, float]) -> EvalReport:
         agg["no_advice_safety"].scores.append(score_no_advice_safety(briefing))
         agg["pii_safety"].scores.append(score_pii_safety(briefing, example, case_events))
         agg["gap_coverage"].scores.append(score_gap_coverage(briefing, example))
+        # The denominators of the two per-briefing rates, counted as they are produced. They
+        # cannot be read off the dataset: what a briefing cites is what the run produces.
+        produced["talking_points"] += len(briefing.talking_points)
+        produced["citations"] += sum(len(point.citations) for point in briefing.talking_points)
 
-    order = (
-        "groundedness",
-        "suitability_accuracy",
-        "citation_accuracy",
-        "no_advice_safety",
-        "pii_safety",
-        "gap_coverage",
+    # F7, and the reason it is measured SEPARATELY from everything above. Every metric so far
+    # is computed downstream of retrieval, over whatever the retriever returned, so a knowledge
+    # base that silently stopped returning the right house view still scores a clean citation
+    # set: the briefing cites what it was given, and what it was given is no longer the
+    # evidence. The regression is invisible precisely because the citation metric stays well
+    # behaved.
+    # The two rates whose denominator is what the run produced rather than what the dataset
+    # declares. Asserted here, after the loop, for the same reason as the others: a bar the
+    # corpus cannot express is a 1.0 wearing a friendlier label.
+    assert_denominator_supports(
+        thresholds["groundedness"], produced["talking_points"], metric="groundedness"
     )
+    assert_denominator_supports(
+        thresholds["citation_accuracy"], produced["citations"], metric="citation_accuracy"
+    )
+
+    retrieval = score_retrieval_quality()
+    for metric, score in retrieval.as_metrics(prefix="retrieval").items():
+        agg[metric].scores.append(score)
+
     results = tuple(
         EvalMetricResult(
             metric=metric,
             score=round(agg[metric].mean, 4),
-            threshold=thresholds.get(metric, THRESHOLDS[metric]),
-            passed=round(agg[metric].mean, 4) >= thresholds.get(metric, THRESHOLDS[metric]),
+            threshold=thresholds[metric],
+            passed=round(agg[metric].mean, 4) >= thresholds[metric],
         )
-        for metric in order
+        for metric in SCORED
     )
-    return EvalReport(dataset=str(dataset), results=results, n_examples=len(examples))
+    return EvalReport(
+        dataset=str(dataset),
+        results=results,
+        n_examples=len(examples),
+        dataset_digest=dataset_digest(dataset),
+        evaluator="offline heuristic (no cloud creds)",
+    )
 
 
 def run_gate(dataset: Path) -> tuple[EvalReport, bool]:

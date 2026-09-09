@@ -1,0 +1,24 @@
+# Narrative quality floors for the briefing's PROSE, per promotion bundle. Owner: model risk.
+#
+# These are the only numbers in this service that say how GOOD a talking point has to be, as
+# opposed to whether it is grounded, correctly cited, suitable for this client, free of advice
+# or free of personal data. Everything else the eval scores is deterministic and binary. The
+# prose is what a relationship manager reads to the client, and until this file existed nothing
+# measured it at all.
+#
+# Two bars, and the difference between them is the point:
+#   floor   below this the profile MUST NOT serve this vertical. Not "degraded". Unfit.
+#   target  at or above this the profile is at full quality. Between the two is DEGRADED:
+#           usable, and visibly worse, which is the band a portability claim describes in
+#           adjectives and which nothing measured until there was a floor.
+#
+# The vertical is named for the promotion bundle rather than the repository, because the bundle
+# is what a promotion is granted against.
+schema = "quality-floors/v1"
+owner = "model risk (the model-quality-gate promotion authority)"
+
+[verticals.doc3-cio-advisory]
+floor = 0.65
+target = 0.88
+note = """A talking point a relationship manager reads to a client. It is reviewed by the person \
+speaking it and by nobody else, so a weak point is not caught downstream."""

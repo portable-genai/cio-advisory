@@ -78,6 +78,15 @@ eval: ## Run the A4 eval gate (groundedness / suitability / citations / no-advic
 	$(PYTHON) scripts/render_golden.py --check
 	$(PYTHON) eval/run_eval.py
 
+eval-narrative: ## Judge the briefing PROSE against the model-risk floors (offline, no server).
+	$(PYTHON) eval/run_narrative_eval.py
+
+evals-doc: ## Regenerate docs/evals.md from the rubrics, golden sets and floors.
+	$(PYTHON) scripts/render_evals_doc.py
+
+evals-doc-check: ## Fail when docs/evals.md and the artifacts it describes disagree.
+	$(PYTHON) scripts/render_evals_doc.py --check
+
 portability: ## Execute the bounded offline/profile portability proof.
 	PYTHONPATH=src $(PYTHON) scripts/portability_demo.py
 
@@ -87,7 +96,7 @@ plugin: ## Render the Agent Plugins 1.0.0 directory from this repo's own declara
 mcp-serve: ## Serve the governed tool catalog over MCP 2026-07-28 (stdio; needs [gcp]).
 	python -m cio_advisory.mcp
 
-check: lint test eval demo-selftest portability plugin ## Run the full offline quality gate (no node, no cloud).
+check: lint test eval eval-narrative evals-doc-check demo-selftest portability plugin ## Run the full offline quality gate (no node, no cloud).
 
 demo-selftest: ## Prove the served presenter states and evidence hooks cannot rot silently.
 	PYTHONPATH=src:scripts $(PYTHON) scripts/demo_selftest.py

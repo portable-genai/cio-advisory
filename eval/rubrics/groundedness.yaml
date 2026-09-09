@@ -35,3 +35,9 @@ scoring:
 notes: >
   The offline heuristic is intentionally strict: it credits a talking point only when it
   carries a citation, so passing the offline gate is a lower bound on the LLM-judge score.
+
+denominator:
+  # A rate over talking points, not over clients: six golden clients produce forty-three points,
+  # which is what a 0.80 bar is actually measured across.
+  kind: rate
+  over: talking points across the briefings

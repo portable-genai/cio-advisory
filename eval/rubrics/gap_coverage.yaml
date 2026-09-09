@@ -1,0 +1,45 @@
+# Scored by: eval/run_eval.py::score_gap_coverage against `expected_addressed_gaps`, hand-written
+# in eval/expectations.json and NEVER derived from the briefing.
+#
+# That is not fussiness, and the reason is recorded because it was paid for once. The first
+# version of this metric built its denominator from the themes the briefing had presented, so
+# deleting every gap-closing point also deleted every expectation, and a briefing that closed
+# nothing scored a perfect 1.0. The falsifiability proof is what caught it, which is the whole
+# argument for running one.
+#
+# Two things the hand-written denominator deliberately leaves out, because counting them would
+# reward the wrong behaviour: a gap today's report says nothing about, where the only way to
+# score would be to invent a theme; and a gap whose only theme the suitability engine refused
+# for this client, where the only way to score would be to present it anyway. A client for whom
+# neither applies has an empty expectation and scores 1.0, which is correct, and is why three of
+# the six golden clients cannot move this number.
+metric: gap_coverage
+description: >
+  Of the allocation gaps a correct briefing should close for this client, the share the briefing
+  actually speaks to. The question a relationship manager has: the client is short of something,
+  the house view has a theme for it, did the briefing connect the two.
+# 1.0, and the number is arithmetic rather than ambition. The hand-written expectations carry
+# five gaps in total across the six golden clients, and a 0.90 bar tolerates one miss only over
+# ten: four of five is 0.80 and fails. The bar was already 1.0 and only the label said otherwise.
+# Written down rather than grown, because the expectations are deliberately conservative (see
+# above) and inventing gaps to reach ten would reward exactly the behaviour they exclude.
+threshold: 1.0
+direction: maximize
+applies_to:
+  - AdvisoryBriefing.talking_points
+criteria:
+  - id: gap_is_addressed
+    description: A talking point connects the client's gap to a published house view.
+    weight: 1.0
+scoring:
+  scale: [0.0, 1.0]
+  pass_if: "score >= threshold"
+denominator:
+  # A rate over expected gaps, not over clients. Three of six golden clients carry an empty
+  # expectation by design, so the case count is the wrong denominator and would understate what
+  # this bar is measured over.
+  kind: rate
+  over: hand-written expected_addressed_gaps across the golden clients
+falsified_by: >
+  tests/unit/test_not_falsely_green.py strips the gap-closing talking points from a briefing
+  whose client has expectations, which is the defect that once scored 1.0.

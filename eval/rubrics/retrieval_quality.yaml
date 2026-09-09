@@ -1,0 +1,62 @@
+# Scored by: eval/run_eval.py::score_retrieval_quality against eval/datasets/retrieval_queries.jsonl,
+# whose `relevant` lists are a REVIEWER's answer to "which published house views should this
+# question find", written by reading the corpus. Never derived from what the retriever returned:
+# a label taken from the component under test agrees with it by construction.
+#
+# Why these three exist at all. Every other metric in this gate is computed DOWNSTREAM of
+# retrieval, over whatever the retriever happened to return, so a knowledge base that silently
+# stopped returning the right house view still scores a clean citation set: the briefing cites
+# what it was given, and what it was given is no longer the evidence. The regression is invisible
+# precisely because citation_accuracy stays well behaved. These are the metrics that can see it.
+#
+# Scored against the REAL LocalFtsHouseViewAdapter (SQLite FTS5, BM25), over an in-memory index
+# seeded from the shipped corpus. In memory deliberately: the adapter's default is a file under
+# the running user's home directory that self-seeds once and then persists, so a gate reading it
+# would score whichever corpus that machine happened to index first.
+metric: retrieval_recall_at_5
+description: >
+  Share of the house views a reviewer marked relevant that appear in the retriever's top five.
+  Macro-averaged per query, so one broad question cannot decide the number for the whole set.
+threshold: 1.0
+direction: maximize
+applies_to:
+  - HouseViewRetrievalPort.retrieve
+criteria:
+  - id: labelled_view_is_in_the_cut
+    description: Each reviewer-labelled house view appears within the top five.
+    weight: 1.0
+scoring:
+  scale: [0.0, 1.0]
+  pass_if: "score >= threshold"
+denominator:
+  retrieval_recall_at_5:
+    # 1.0 rather than a rate with headroom, and the reason is the corpus rather than ambition:
+    # the index holds eight house views and the cut is five, so a labelled view falling outside
+    # the top five is a defect in the retriever, not sampling noise. Seventeen labelled
+    # positives WOULD support a 0.90 bar; it is set at 1.0 because there is nothing here for
+    # that tolerance to describe.
+    kind: rate
+    over: reviewer-labelled house views
+  retrieval_precision_at_5:
+    kind: rate
+    over: distinct views returned within the cut
+  retrieval_mrr:
+    kind: rate
+    over: labelled queries
+companion_metrics:
+  retrieval_precision_at_5:
+    threshold: 0.35
+    description: >
+      Share of the distinct views returned within the cut that a reviewer marked relevant. Most
+      queries here have one right answer and the cut is five, so the achievable ceiling is
+      structurally near 0.4; the bar exists to catch a retriever that starts padding its results,
+      which is how a knowledge base is "fixed" after a recall complaint.
+  retrieval_mrr:
+    threshold: 1.0
+    description: >
+      Mean reciprocal rank of the first relevant house view. Rank matters because a briefing is
+      built from the top of the list and a prompt is truncated from the bottom of it.
+falsified_by: >
+  eval/run_eval.py::prove_retrieval_metrics_can_go_red, run before any score is trusted. A
+  retriever that returns nothing takes recall and MRR red; one that returns the whole corpus
+  takes precision red. The second direction is the one a recall-only proof would never see.
