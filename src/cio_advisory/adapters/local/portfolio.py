@@ -32,7 +32,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import duckdb
+from hex_service_kit.demobook import DuckDbStore
 
 from ... import demo_book
 from ...config import Settings
@@ -50,91 +50,18 @@ from ...domain.models import (
 #: Default on-disk location for the laptop book (overridable via settings.local.book_path).
 _DEFAULT_BOOK_PATH = Path.home() / ".cio_advisory" / "book.duckdb"
 
-#: The tables, in the column order the BigQuery schema declares them. One DDL statement per
-#: table so a column added to the managed schema is added here in the same shape.
-_SCHEMA: tuple[tuple[str, str], ...] = (
-    (
-        "instruments",
-        """
-        instrument_id TEXT PRIMARY KEY,
-        name          TEXT NOT NULL,
-        asset_class   TEXT NOT NULL,
-        sub_class     TEXT,
-        region        TEXT,
-        theme_tags    TEXT[],
-        esg           BOOLEAN,
-        liquidity     TEXT
-        """,
-    ),
-    (
-        "model_portfolios",
-        """
-        model_id       TEXT NOT NULL,
-        risk_appetite  TEXT NOT NULL,
-        jurisdiction   TEXT,
-        asset_class    TEXT NOT NULL,
-        target_weight  DOUBLE NOT NULL,
-        min_weight     DOUBLE NOT NULL,
-        max_weight     DOUBLE NOT NULL,
-        effective_from DATE NOT NULL,
-        source         TEXT,
-        PRIMARY KEY (model_id, asset_class)
-        """,
-    ),
-    (
-        "client_profiles",
-        """
-        client_id            TEXT PRIMARY KEY,
-        tenant               TEXT NOT NULL,
-        risk_appetite        TEXT NOT NULL,
-        objectives           TEXT[],
-        knowledge_experience TEXT,
-        constraints          TEXT[],
-        jurisdiction         TEXT,
-        currency             TEXT,
-        segment              TEXT,
-        time_horizon_years   BIGINT,
-        last_review_date     DATE,
-        as_of_date           DATE NOT NULL
-        """,
-    ),
-    (
-        "holdings",
-        """
-        client_id     TEXT NOT NULL,
-        instrument_id TEXT NOT NULL,
-        line_no       BIGINT NOT NULL,
-        value         DOUBLE NOT NULL,
-        weight        DOUBLE NOT NULL,
-        currency      TEXT,
-        as_of_date    DATE NOT NULL,
-        PRIMARY KEY (client_id, instrument_id)
-        """,
-    ),
-    (
-        "book_manifest",
-        """
-        book_version  TEXT NOT NULL,
-        as_of_date    DATE NOT NULL,
-        fictional     BOOLEAN NOT NULL,
-        loaded_at     TIMESTAMP,
-        source_commit TEXT,
-        tenant        TEXT NOT NULL
-        """,
-    ),
-)
-
-#: Column order per table, derived from the DDL above so the two cannot disagree.
+#: The tables the store holds, their column order and their DDL all come from the book's own
+#: :class:`~hex_service_kit.demobook.Table` declarations now. They used to be a second copy in
+#: this module: a DDL string per table, a column order derived from it by splitting the DDL,
+#: and a date-column set beside them. Three descriptions of one schema, none of which any test
+#: could hold against the BigQuery schema they were meant to mirror.
 _COLUMNS: dict[str, tuple[str, ...]] = {
-    table: tuple(
-        line.split()[0]
-        for line in (raw.strip() for raw in ddl.strip().splitlines())
-        if line and not line.upper().startswith("PRIMARY KEY")
-    )
-    for table, ddl in _SCHEMA
+    table.name: table.columns for table in demo_book.BOOK.load_order()
 }
 
-_DATE_COLUMNS = frozenset({"as_of_date", "last_review_date", "effective_from"})
+_DATE_COLUMNS = frozenset(
+    column for table in demo_book.BOOK.load_order() for column in table.date_columns
+)
 
 
 class LocalPortfolioAdapter:
@@ -144,91 +71,38 @@ class LocalPortfolioAdapter:
         self._settings = settings
         path = getattr(getattr(settings, "local", None), "book_path", "") or str(_DEFAULT_BOOK_PATH)
         self._path = path
-        self._conn = self._connect(path)
-        self._init_schema()
-        self._maybe_seed()
+        # The store, the schema, the self-seed and the overwrite guard all come from the kit
+        # now. It creates the tables from the book's own column declarations, seeds when the
+        # store holds nothing at all, and leaves a populated store exactly as it is whoever
+        # wrote it: re-seeding on every open would discard the clients an audience registered
+        # in an earlier run of the same demo. It seeds under every laptop profile including
+        # `live`, because the fictional CLIENTS are the subject of a briefing rather than the
+        # evidence it cites and the console labels them; the fictional house views are a
+        # different matter and stay out of `live` entirely (`house_views.py`).
+        demo_book.validate()
+        self._store = DuckDbStore(demo_book.BOOK, path)
+        self._conn = self._store.connection
 
     # ------------------------------------------------------------------ #
-    # Connection / schema / seeding
+    # Seeding
     # ------------------------------------------------------------------ #
-    @staticmethod
-    def _connect(path: str) -> duckdb.DuckDBPyConnection:
-        if path != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-        return duckdb.connect(path)
-
-    def _init_schema(self) -> None:
-        for table, ddl in _SCHEMA:
-            self._conn.execute(f"CREATE TABLE IF NOT EXISTS {table} ({ddl})")
-
-    def _scalar(self, sql: str) -> Any:
-        """The first column of the first row, or ``None`` when the query returned none."""
-        row = self._conn.execute(sql).fetchone()
-        return None if row is None else row[0]
-
-    def _row_counts(self) -> dict[str, int]:
-        return {
-            table: int(self._scalar(f"SELECT count(*) FROM {table}") or 0) for table, _ in _SCHEMA
-        }
-
-    def _manifest_rows(self) -> list[dict[str, Any]]:
-        return [
-            dict(zip(_COLUMNS["book_manifest"], row, strict=True))
-            for row in self._conn.execute("SELECT * FROM book_manifest").fetchall()
-        ]
-
-    def _maybe_seed(self) -> None:
-        """Insert the shipped book when this store holds nothing at all, and never otherwise.
-
-        Seeds under every laptop profile including ``live``: the fictional CLIENTS are the
-        subject of a briefing, not the evidence it cites, and the console labels them. The
-        fictional house views are a different matter and stay out of ``live`` entirely.
-
-        A store that already holds rows is left exactly as it is, whoever wrote them. That
-        matters for a demo as much as for a real book: re-seeding on every open would discard
-        the clients an audience registered in an earlier run of the same demo.
-        """
-        if all(count == 0 for count in self._row_counts().values()):
-            self.seed_shipped_book()
-
     def seed_shipped_book(self) -> None:
         """Replace this store's contents with the shipped demo book.
 
         Refuses a populated store whose manifest does not declare it fictional, which is the
         same guard, in the same function, that the managed loader runs before it truncates a
-        BigQuery dataset. One rule proved in one place, called from two.
+        BigQuery dataset. One rule proved in one place, called from two, and since the kit
+        owns it that is now one place across five repositories rather than this one.
         """
-        demo_book.validate()
-        counts = self._row_counts()
-        if not demo_book.may_overwrite(counts, self._manifest_rows()):
-            held = ", ".join(f"{table}={count}" for table, count in sorted(counts.items()) if count)
-            raise PermissionError(
-                f"refusing to seed {self._path}: it holds rows ({held}) and its manifest does "
-                "not say they are fictional"
-            )
-        for table, _ in reversed(_SCHEMA):
-            self._conn.execute(f"DELETE FROM {table}")
-        for table, _ in _SCHEMA:
-            self._insert(table, demo_book.rows(table))
+        self._store.seed_shipped_book()
 
     def _insert(self, table: str, rows: list[dict[str, Any]]) -> None:
-        columns = _COLUMNS[table]
-        placeholders = ", ".join("?" for _ in columns)
-        values = [
-            [
-                demo_book.as_date(row.get(column)) if column in _DATE_COLUMNS else row.get(column)
-                for column in columns
-            ]
-            for row in rows
-        ]
-        if values:
-            self._conn.executemany(
-                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})", values
-            )
+        """Insert rows the ADAPTER wrote (an audience registration), in declared order."""
+        self._store.insert(demo_book.BOOK.table(table), rows)
 
     def close(self) -> None:
         """Close the DuckDB connection (the CLI and tests reopen the same file)."""
-        self._conn.close()
+        self._store.close()
 
     # ------------------------------------------------------------------ #
     # Audience registration
@@ -393,7 +267,7 @@ class LocalPortfolioAdapter:
         package, so a book somebody loaded themselves reports THEIR date. A store with no
         manifest row reports an empty date, which reads as "the store does not say".
         """
-        manifest = self._manifest_rows()
+        manifest = self._store.manifest_rows()
         as_of = ""
         for row in manifest:
             value = row.get("as_of_date")

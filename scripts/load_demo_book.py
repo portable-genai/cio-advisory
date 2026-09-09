@@ -54,6 +54,14 @@ _SHIPPED = demo_book.SHIPPED_TENANT
 #: quietly delete the only evidence the tenant gate does anything.
 _OTHER_TENANT_CLIENT = "client-000999"
 
+#: The tables this run writes: the repository's own, then the manifest LAST, because it records
+#: the load that wrote the others. Taken from ``BOOK.load_order()`` rather than listed here, so
+#: the set the loader writes and the set the contract test holds against the Terraform are the
+#: same set. A sibling repository listed them separately and shipped a manifest no schema
+#: declared: a load that exits on a not-found before its first row, invisible to three green
+#: gates because the guard iterated the repository's own tables instead.
+_TABLES: tuple[str, ...] = tuple(table.name for table in demo_book.BOOK.load_order())
+
 
 def _source_commit() -> str:
     try:
@@ -83,7 +91,7 @@ def rows_to_load(tenant: str) -> dict[str, list[dict[str, Any]]]:
     loaded_at = datetime.now(UTC).isoformat()
     commit = _source_commit()
     out: dict[str, list[dict[str, Any]]] = {}
-    for table in demo_book.TABLES:
+    for table in _TABLES:
         rows = [_retenant(table, row, tenant) for row in demo_book.rows(table)]
         if table == "book_manifest":
             rows = [dict(row, loaded_at=loaded_at, source_commit=commit) for row in rows]
@@ -134,7 +142,7 @@ def load(project: str, dataset: str, rows: dict[str, list[dict[str, Any]]], loca
 
     client = bigquery.Client(project=project, location=location)
     dataset_ref = f"{project}.{dataset}"
-    counts = _existing(client, dataset_ref, demo_book.TABLES)
+    counts = _existing(client, dataset_ref, _TABLES)
     manifest = _manifest_rows(client, dataset_ref) if counts.get("book_manifest") else []
     if not demo_book.may_overwrite(counts, manifest):
         held = ", ".join(f"{table}={count}" for table, count in sorted(counts.items()) if count)
@@ -143,7 +151,7 @@ def load(project: str, dataset: str, rows: dict[str, list[dict[str, Any]]], loca
             "not say they are fictional. This loader truncates; point it at an empty dataset "
             "or one holding a previous demo book."
         )
-    for table in demo_book.TABLES:
+    for table in _TABLES:
         table_rows = rows[table]
         job = client.load_table_from_json(
             table_rows,

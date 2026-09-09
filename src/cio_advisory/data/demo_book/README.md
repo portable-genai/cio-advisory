@@ -30,3 +30,16 @@ exists to prove the tenant gate: a `demo-bank` persona cannot list or brief it.
 Edit these files by hand. Weights per client must sum to one, every `instrument_id` must
 exist in `instruments.ndjson`, and every model portfolio's targets must sum to one with each
 target inside its band; `tests/contract/test_demo_book.py` refuses anything else.
+
+The SHAPE of the files is checked by `hex_service_kit.demobook`, which also owns the reader,
+the overwrite guard, the date coercion and the DuckDB store. This repository wrote all four
+first and the kit generalised them a day later, which left the repository that most needs the
+guard with the weakest version of it: without per-table column declarations its contract test
+could check that a table existed, and not that the book carries the columns the BigQuery
+schema does. It can now, over the set the LOADER writes rather than the set this repository
+declares, which is one table more: the manifest.
+
+`house_views.ndjson` is deliberately not part of that set. It is a File Search corpus rather
+than a warehouse table, it is read only by the local grounding index, and it must never seed
+under the `live` profile: what may not enter a live briefing is the EVIDENCE, and a house view
+is what a talking point cites.
