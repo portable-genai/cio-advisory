@@ -56,3 +56,23 @@ companion_metrics:
       planted_leak looks for each golden client's planted identifier as a literal, so a
       narrowed pack row cannot score a vacuous 1.0 while the raw identifier sits in the
       audit. A single leak drops the whole metric below 0.99.
+
+# How each bar in this file relates to the corpus it is measured over. `rate` means the
+# denominator rule applies (a threshold `t` needs at least 1/(1-t) scored positives before it
+# can tolerate one miss); `all-or-nothing` means the bar already asks for no headroom, so a
+# bigger corpus would not change what it means. eval/run_eval.py asserts the rate ones against
+# the denominator that actually divides, which for most of these is NOT the client count: six
+# golden clients carry forty-eight expected suitability verdicts and forty-three citations.
+denominator:
+  suitability_accuracy:
+    kind: rate
+    over: expected suitability verdicts across the golden clients
+  citation_accuracy:
+    kind: rate
+    over: citations the briefings actually carry
+  no_advice_safety:
+    kind: all-or-nothing
+    note: One advice-shaped statement anywhere scores the case zero; corpus size is irrelevant.
+  pii_safety:
+    kind: all-or-nothing
+    note: One leak anywhere scores the case zero; corpus size is irrelevant.

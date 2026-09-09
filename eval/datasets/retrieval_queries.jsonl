@@ -1,0 +1,29 @@
+# Labelled retrieval queries for the house-view index (F7: retrieval quality).
+#
+# Why this file exists. Every "grounding" number in this repository is computed DOWNSTREAM of
+# retrieval, over whatever the retriever happened to return, so a knowledge base that silently
+# stopped returning the right house view still scores a clean citation set: the briefing cites
+# what it was given, and what it was given is no longer the evidence. The regression is invisible
+# precisely because the citation metric stays well behaved.
+#
+# `relevant` is a REVIEWER's answer to "which published house views should this question find",
+# written by reading the corpus. It is never derived from what the retriever returned, because a
+# label taken from the component under test agrees with it by construction and measures nothing.
+#
+# Scored against the REAL LocalFtsHouseViewAdapter (SQLite FTS5, BM25), seeded from the shipped
+# corpus, which is the same retriever the offline briefing path uses. It can genuinely miss, and
+# the noise in its top-k is real: that is what makes precision worth reporting beside recall.
+#
+# All house views are the fictional CIO publication shipped in cio_advisory.data.demo_book.
+{"id": "q-duration-risk", "query": "long duration sovereign exposure while the rate path is unsettled", "relevant": ["cio-2026q3-long-duration"]}
+{"id": "q-concentration", "query": "how concentrated is broad equity exposure in mega-cap technology", "relevant": ["cio-2026q3-megacap-concentration"]}
+{"id": "q-private-markets", "query": "selective private market exposure for longer horizon clients", "relevant": ["cio-2026q3-private-markets"]}
+{"id": "q-carry", "query": "attractive carry from high quality investment grade credit", "relevant": ["cio-2026q3-quality-credit"]}
+{"id": "q-cash", "query": "is holding excess cash a drag on long term real returns", "relevant": ["cio-2026q3-cash-drag"]}
+{"id": "q-cre", "query": "commercial real estate maturities refinancing into higher rates", "relevant": ["cio-2026q3-cre-refinancing"]}
+{"id": "q-esg-income", "query": "labelled transition bonds with a documented use of proceeds", "relevant": ["cio-2026q3-esg-transition-bonds"]}
+{"id": "q-ai-supply-chain", "query": "structural demand for compute and power in the AI infrastructure supply chain", "relevant": ["cio-2026q3-ai-infrastructure"]}
+{"id": "q-income-two-ways", "query": "where can an income oriented portfolio find yield today", "relevant": ["cio-2026q3-quality-credit", "cio-2026q3-esg-transition-bonds"]}
+{"id": "q-equity-two-ways", "query": "what are the published equity views this quarter", "relevant": ["cio-2026q3-ai-infrastructure", "cio-2026q3-megacap-concentration"]}
+{"id": "q-rate-sensitive", "query": "which views turn on the path of interest rates", "relevant": ["cio-2026q3-long-duration", "cio-2026q3-cre-refinancing", "cio-2026q3-cash-drag"]}
+{"id": "q-diversifiers", "query": "what diversifies return drivers away from public equity and credit", "relevant": ["cio-2026q3-private-markets", "cio-2026q3-cre-refinancing"]}
