@@ -266,7 +266,7 @@ def render_client(meta: dict, client: dict) -> str:
         f"<header data-panel='briefing-header' data-briefing-client='{esc(client['client_id'])}' "
         f"data-briefing-points='{len(points)}' data-briefing-flagged='{n_flag}' "
         f"data-briefing-citations='{n_cite}' data-briefing-review='{str(review).lower()}'>"
-        f"<h1>CIO advisory briefing — client <span class='mono'>{esc(client['client_id'])}</span></h1>"
+        f"<h1>CIO advisory briefing: client <span class='mono'>{esc(client['client_id'])}</span></h1>"
         f"<p class='sub'>{esc(client.get('descriptor', ''))} · profile <b>{esc(meta.get('profile'))}</b> · "
         f"region <b>{esc(meta.get('region'))}</b> · generated <b>{esc(client.get('generated_at', '')[:19])}</b></p>"
         "</header>"
@@ -310,7 +310,7 @@ def render_index(data: dict) -> str:
             f"<td>{'yes' if c.get('requires_human_review') else 'no'}</td></tr>"
         )
     body = (
-        "<h1>CIO advisory briefings — synthetic clients</h1>"
+        "<h1>CIO advisory briefings: synthetic clients</h1>"
         f"<p class='sub'>Profile <b>{esc(data.get('profile'))}</b> · region <b>{esc(data.get('region'))}</b> · "
         "decision-support, not advice. Every briefing is maker-checker gated (the RM is the checker).</p>"
         '<section class="panel" data-panel="clients"><h2>Clients</h2><div class="body">'
