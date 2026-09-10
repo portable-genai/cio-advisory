@@ -7,21 +7,21 @@ prints what is about to happen and waits for you to press Enter, then performs t
 
 Usage (two terminals)::
 
-    # terminal 1 — the live demo server
+    # terminal 1: the live demo server
     PYTHONPATH=src python scripts/cio_demo_server.py
 
-    # terminal 2 — the guided walkthrough (a real Chrome window opens)
+    # terminal 2: the guided walkthrough (a real Chrome window opens)
     pip install playwright && playwright install chromium     # one-time
     python scripts/cio_demo_playwright.py
 
 You can also point this at the real Next.js console instead of the demo server by setting
 ``DEMO_URL`` (e.g. ``DEMO_URL=http://localhost:3000`` with ``make run-ui`` +
-``make run-api PROFILE=local``), then drive it manually — the narration still applies.
+``make run-api PROFILE=local``), then drive it manually. The narration still applies.
 
 Environment overrides:
     DEMO_URL    server base URL (default http://127.0.0.1:8099)
     HEADLESS=1  run headless (used for the self-test; no window)
-    DEMO_AUTO=1 don't wait for Enter — advance automatically (self-test / recording)
+    DEMO_AUTO=1 don't wait for Enter, advance automatically (self-test / recording)
     SLOWMO_MS   per-action slow-motion in ms (default 250 headed, 0 headless)
     CHROME_PATH explicit Chromium/Chrome binary (else Playwright's own)
 """
@@ -97,7 +97,7 @@ STEPS = [
         "[data-panel='portfolio']",
     ),
     (
-        "Maker-checker — every briefing always requires human review (P-06). The RM is the "
+        "Maker-checker: every briefing always requires human review (P-06). The RM is the "
         "human checker; the assistant is only the maker. Every talking point is cited back "
         "to a CIO house view, and every figure beside it can be recomputed by hand.",
         True,
@@ -148,7 +148,7 @@ def main() -> int:
         browser = p.chromium.launch(headless=HEADLESS, slow_mo=SLOWMO, executable_path=CHROME_PATH)
         page = browser.new_context(viewport={"width": 1100, "height": 900}).new_page()
 
-        print("\n=== CIO advisory live demo — press Enter to advance each step ===\n")
+        print("\n=== CIO advisory live demo: press Enter to advance each step ===\n")
         page.goto(BASE + "/restart", wait_until="load")  # always start clean
         page.goto(BASE + "/", wait_until="load")
 
