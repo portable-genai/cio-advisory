@@ -141,7 +141,8 @@ class DemoSession:
         )
         bar = (
             f"<div class='democtl' data-demo='presenter-step' data-step='{self.idx}'>"
-            f"<span class='lbl'>Step {self.idx + 1}/{len(STEPS)} — <b>{r.esc(step['label'])}</b></span>"
+            f"<span class='lbl'>Step {self.idx + 1}/{len(STEPS)}</span>"
+            f"<span class='lbl'><b>{r.esc(step['label'])}</b></span>"
             f"{pill}<span class='spacer'></span>{next_btn}"
             "<form method='post' action='/restart'><button class='restart' type='submit'>Restart</button></form>"
             "</div>"
