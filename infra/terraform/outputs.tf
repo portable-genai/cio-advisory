@@ -32,7 +32,7 @@ output "portfolio_dataset_location" {
 
 # ------------------------------- WORM logging ------------------------------- #
 output "log_bucket" {
-  description = "Locked WORM audit log bucket id (settings.yaml logging.bucket)."
+  description = "Audit log bucket id (settings.yaml logging.bucket); WORM-locked only when worm_locked = true."
   value       = google_logging_project_bucket_config.worm_audit.id
 }
 

@@ -21,6 +21,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 const nextConfig = {
   reactStrictMode: true,
   agentRules: false,
+  // Standalone output: the deployed image copies `.next/standalone` and starts it with
+  // `node server.js`, so the serving container carries no package manager. See ui/Dockerfile.
+  output: "standalone",
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),
   async headers() {
     return [

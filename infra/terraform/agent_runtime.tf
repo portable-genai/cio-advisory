@@ -27,14 +27,14 @@ resource "google_service_account" "agent_runtime" {
 # read portfolios, call Model Armor + DLP, write audit logs + traces, use the regional CMEK.
 locals {
   agent_runtime_roles = [
-    "roles/aiplatform.user",           # invoke Gemini models / Agent Runtime
-    "roles/discoveryengine.viewer",    # query the house-view store at serving time
-    "roles/bigquery.dataViewer",       # read portfolios + client profiles
-    "roles/bigquery.jobUser",          # run the read queries
-    "roles/dlp.user",                  # deidentifyContent (PII redaction, P-04)
-    "roles/logging.logWriter",         # write to the audit log (routed to WORM bucket)
-    "roles/cloudtrace.agent",          # export OpenTelemetry spans
-    "roles/aiplatform.modelArmorUser", # call Model Armor sanitize endpoints
+    "roles/aiplatform.user",        # invoke Gemini models / Agent Runtime
+    "roles/discoveryengine.viewer", # query the house-view store at serving time
+    "roles/bigquery.dataViewer",    # read portfolios + client profiles
+    "roles/bigquery.jobUser",       # run the read queries
+    "roles/dlp.user",               # deidentifyContent (PII redaction, P-04)
+    "roles/logging.logWriter",      # write to the audit log (routed to WORM bucket)
+    "roles/cloudtrace.agent",       # export OpenTelemetry spans
+    "roles/modelarmor.user",        # call Model Armor sanitize endpoints
   ]
 }
 

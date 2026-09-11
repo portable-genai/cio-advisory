@@ -25,3 +25,18 @@ vpc_network_name = "cio-advisory-vpc"
 
 # Sovereignty perimeter on by default.
 enable_vpc_sc = true
+
+# WORM audit lock. NO default: every deployment names it. true is the compliant production
+# posture and is IRREVERSIBLE for the retention window; false keeps the bucket destroyable.
+worm_locked = true
+
+# Shared-project declines. A deployment sharing its project with a stack that already owns the
+# Org Policies, the data-access audit config and the perimeter declines all three, and a region
+# that does not serve the malicious-URI filter narrows the guardrail (asia-southeast1 does not):
+# manage_org_policies           = false
+# manage_audit_config           = false
+# enable_vpc_sc                 = false
+# model_armor_full_capabilities = false
+#
+# Embedding host: the portal's API runtime identity, filled after the portal apply mints it.
+# additional_serving_service_accounts = ["journey-a-000000@acme-wealth-sg-prod.iam.gserviceaccount.com"]

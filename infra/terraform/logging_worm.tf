@@ -2,8 +2,8 @@
 #
 # General Principle map:
 #   P-08 (immutable audit / WORM): the audit log is routed to a Cloud Logging bucket whose
-#         retention is var.retention_days (~7 years) and whose `locked = true` makes it
-#         Write-Once-Read-Many. The audit adapter (cloud_logging_audit) writes already-
+#         retention is var.retention_days (~7 years) and which is Write-Once-Read-Many when
+#         var.worm_locked = true. The variable has no default: see variables.tf. The audit adapter (cloud_logging_audit) writes already-
 #         redacted AuditEvents here.
 #   P-03 (residency): bucket location is asia-southeast1.
 #   P-09 (CMEK explicit): the bucket is CMEK-encrypted (logging SA key binding in kms.tf).
@@ -15,18 +15,19 @@
 # # Setting `locked = true` below permanently prevents reducing retention or  # #
 # # deleting this bucket for the full retention window. You CANNOT undo it,   # #
 # # not even with project-owner rights. Confirm retention_days before apply.  # #
-# # To trial without locking, set locked = false (NOT compliant for prod).    # #
+# # To trial without locking, set worm_locked = false (NOT WORM, not prod).   # #
 # ############################################################################ #
 
 resource "google_logging_project_bucket_config" "worm_audit" {
   project        = var.project_id
   location       = var.region          # asia-southeast1 (P-03)
   bucket_id      = "cio-advisory-worm" # matches settings.yaml logging.bucket
-  description    = "WORM audit bucket for B3 CIO advisory assistant (locked, ~7y retention)."
+  description    = "Audit bucket for B3 CIO advisory assistant (WORM when worm_locked = true)."
   retention_days = var.retention_days # 2557 (~7 years) by default
 
-  # IRREVERSIBLE : see WARNING banner above. WORM compliance requires this true.
-  locked = true
+  # IRREVERSIBLE when true: see the WARNING banner above. WORM compliance requires true, and the
+  # variable has no default, so no plan can lock this bucket without the deployment saying so.
+  locked = var.worm_locked
 
   # CMEK on the log bucket (P-09) : explicit, does not cascade.
   cmek_settings {
@@ -60,7 +61,12 @@ resource "google_logging_project_sink" "audit_to_worm" {
 # Enable Data Access audit logs (DATA_READ) so every read of the portfolio store,
 # the house-view store, and the audit store itself is itself audited (P-08).
 # --------------------------------------------------------------------------- #
+#
+# Authoritative for the service it names, which is the point and also the hazard: it REPLACES the
+# project's audit config for `allServices` rather than adding to it. Declined by
+# var.manage_audit_config where another stack in the project owns that configuration.
 resource "google_project_iam_audit_config" "data_access" {
+  count   = var.manage_audit_config ? 1 : 0
   project = var.project_id
   service = "allServices"
 

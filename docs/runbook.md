@@ -67,9 +67,12 @@ Three things decide whether this works.
 
 **The tenant is not optional and `demo-bank` is not it.** Every client row carries the
 tenant that owns it, and the entitlement gate compares that to the tenant the identity
-adapter resolved from the IAP assertion, which on a deployment is the hosted domain. Rows
+adapter resolved from the IAP assertion: the tenant `CIO_IAP_TENANT_DOMAINS_JSON` maps the
+caller's sign-in domain to, or the hosted domain itself where the map names none. Rows
 loaded under any other value are invisible to every real user, and they read exactly like an
-empty dataset. Pass the deployment's hosted domain. The shipped `client-000999` is loaded
+empty dataset. Pass the tenant the deployment's map resolves to. A caller also needs an
+advisory role, which `CIO_IAP_GROUPS_JSON` grants by domain; without it a correctly tenanted
+user is refused just the same. The shipped `client-000999` is loaded
 under `<tenant>-other` instead, on purpose: it is the row that proves a user cannot reach
 another tenant's client, and folding it in would delete that evidence.
 
