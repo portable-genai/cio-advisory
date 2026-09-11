@@ -248,7 +248,7 @@ The active profile selects the adapter, exactly like every other port:
 | Profile | Adapter | What it does |
 |---------|---------|--------------|
 | `local` | `LocalPersonaIdentityAdapter` | Offline dev/test identity via `X-Dev-Persona`, no IdP. Default persona when the header is absent; an unknown id is a `401`. |
-| `gcp` / `platform` | `IapIdentityAdapter` | Verifies the signed `x-goog-iap-jwt-assertion` (signature, issuer, audience, expiry) against Google's IAP public keys. `tenant` from the `hd` claim. Audience from `CIO_IAP_AUDIENCE`; the assertion is never logged. |
+| `gcp` / `platform` | `IapIdentityAdapter` | Verifies the signed `x-goog-iap-jwt-assertion` (signature, issuer, audience, expiry) against Google's IAP public keys. `tenant` from `CIO_IAP_TENANT_DOMAINS_JSON` (or `CIO_IAP_MACHINE_TENANTS_JSON` for a service account), else the `hd` claim; roles from `CIO_IAP_GROUPS_JSON`. Audience from `CIO_IAP_AUDIENCE`; the assertion is never logged. |
 | `onprem` | `OnPremIdentityAdapter` | Fail-closed placeholder: raises `NotImplementedError` rather than returning an anonymous identity. Implement verification against your own enterprise IdP (OIDC/SAML) here. |
 
 Defense in depth (PEP): the edge (Cloud IAP / Apigee) authenticates at ingress, the `agent-guardrail-gateway` applies central policy, and this backend independently re-verifies the assertion and
@@ -263,6 +263,9 @@ defeats actor spoofing and the confused-deputy risk.
 |----------|------|---------|
 | `CIO_PROFILE` | backend | `local` \| `gcp` \| `platform` \| `onprem`. Selects the identity adapter (and the whole adapter set). |
 | `CIO_IAP_AUDIENCE` | backend | The IAP audience string (the exact structured resource path) the backend verifies against. Required in `gcp`/`platform`. |
+| `CIO_IAP_TENANT_DOMAINS_JSON` | backend | JSON object mapping a verified sign-in domain to the tenant id the client book is loaded under. Unset keeps the `hd` claim as the tenant; set and empty refuses. |
+| `CIO_IAP_GROUPS_JSON` | backend | JSON object mapping a sign-in domain to the groups its users hold, such as `group:cio-analyst`. Unset grants none, so every client is refused. |
+| `CIO_IAP_MACHINE_TENANTS_JSON` | backend | JSON object mapping an exact service-account address to a tenant, for a programmatic caller. Never keyed by domain. |
 | `CIO_CORS_ORIGINS` | backend | Explicit origin allowlist for the cross-origin / standalone case. Comma-separated. Never `"*"`. Defaults to the dev origins. |
 | `CIO_FRAME_ANCESTORS` | backend | CSP `frame-ancestors` allowlist: parent origins permitted to iframe the UI. Space-separated. Defaults to `'self'`. |
 | `NEXT_PUBLIC_API_BASE` | UI | Backend base URL the UI calls, and the origin `connect-src` widens to. Must be absolute. Build-time. |

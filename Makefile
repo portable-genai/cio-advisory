@@ -22,7 +22,7 @@ export CIO_PROFILE := $(PROFILE)
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
-        demo-browser portability ui-install ui-check run-api run-ui tf-plan clean \
+        demo-browser portability ui-install ui-check run-api run-ui tf-plan tf-check clean \
         demo-book-dry-run load-demo-book render-golden ingest-house-views
 
 help: ## Show this help.
@@ -141,6 +141,12 @@ ingest-house-views: ## Ingest the shipped CIO corpus into the managed search sto
 
 tf-plan: ## Terraform plan for the asia-southeast1 infrastructure.
 	cd $(TF_DIR) && terraform init -input=false && terraform plan
+
+tf-check: ## Offline Terraform proof: validate, fmt and the mock-provider plan tests (no credentials).
+	terraform -chdir=$(TF_DIR) init -backend=false -input=false
+	terraform -chdir=$(TF_DIR) validate
+	terraform -chdir=$(TF_DIR) fmt -check -recursive
+	terraform -chdir=$(TF_DIR) test
 
 clean: ## Remove caches and build artefacts.
 	rm -rf build dist *.egg-info .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov

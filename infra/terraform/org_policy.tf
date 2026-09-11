@@ -9,9 +9,14 @@
 #
 # Scoped to the project via google_project. To enforce org-wide, move these to an org-level
 # google_org_policy_policy with parent = "organizations/${var.org_id}".
+#
+# Every policy here is gated on var.manage_org_policies. A project holds ONE value per
+# constraint, so in a project another stack already governs these are declined rather than
+# fought over: see that variable for what applying them into a shared project would break.
 
 # Master residency policy: only allow locations inside the selected var.region.
 resource "google_org_policy_policy" "resource_locations" {
+  count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/gcp.resourceLocations"
   parent = "projects/${var.project_id}"
 
@@ -28,6 +33,7 @@ resource "google_org_policy_policy" "resource_locations" {
 
 # Disable VM external IPs : keep the data plane private (P-05).
 resource "google_org_policy_policy" "no_external_ip" {
+  count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/compute.vmExternalIpAccess"
   parent = "projects/${var.project_id}"
 
@@ -42,6 +48,7 @@ resource "google_org_policy_policy" "no_external_ip" {
 
 # Require uniform bucket-level access (no per-object ACL exfiltration paths).
 resource "google_org_policy_policy" "uniform_bucket_access" {
+  count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/storage.uniformBucketLevelAccess"
   parent = "projects/${var.project_id}"
 
@@ -56,6 +63,7 @@ resource "google_org_policy_policy" "uniform_bucket_access" {
 
 # Restrict which services may skip CMEK : keep crypto in this project/region.
 resource "google_org_policy_policy" "restrict_cmek_projects" {
+  count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/gcp.restrictNonCmekServices"
   parent = "projects/${var.project_id}"
 
