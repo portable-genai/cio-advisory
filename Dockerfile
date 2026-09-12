@@ -47,11 +47,37 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# A digest pin freezes the base image, which means it also freezes its unpatched packages.
+# Reproducible and vulnerable are not opposites, and the pin quietly guarantees the second while
+# being cited as evidence of the first. Without this line the promotion scan reports 30 fixable
+# HIGH from the Debian 13.6 base alone, most of them the util-linux family plus openssl. Debian
+# security updates are applied on top, so the image is both reproducible and patched. The sibling
+# stack this deployment runs beside found it the same way, by scanning the image it was about to
+# promote.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
+# Non-root runtime user.
 RUN useradd --create-home --uid 10001 appuser
 
 COPY --from=builder /opt/venv /opt/venv
 COPY src ./src
 COPY config ./config
+
+# Remove pip from the RUNTIME image, in both the system prefix and the venv.
+#
+# Two reasons, and the second is the one a scan reports. First, a serving container installs
+# nothing, so a package manager in it is an install capability an attacker can use and the
+# application never can. Second, pip VENDORS its dependencies -- msgpack and setuptools live inside
+# pip/_vendor -- so a scanner reports pip's bundled copies as installed packages. Neither is a
+# dependency of this application, neither appears in any lock here, and no lock move could reach
+# them, because they were never resolved: they arrived inside pip itself.
+RUN rm -rf /usr/local/lib/python3.14/site-packages/pip \
+           /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+           /opt/venv/lib/python3.14/site-packages/pip \
+           /opt/venv/lib/python3.14/site-packages/pip-*.dist-info \
+           /usr/local/bin/pip /usr/local/bin/pip3 /opt/venv/bin/pip /opt/venv/bin/pip3
 
 USER appuser
 EXPOSE 8091
