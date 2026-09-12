@@ -51,6 +51,16 @@ resource "google_bigquery_table" "holdings" {
   project             = var.project_id
   deletion_protection = true
 
+  # The dataset's default_encryption_configuration stamps this key onto every table BigQuery
+  # creates in it, so the live table carries an encryption_configuration whether or not this
+  # resource declares one. Leaving it undeclared makes a later plan read the server-set block as
+  # a REMOVAL, and removing it FORCES REPLACEMENT of the table, which destroys every row it
+  # holds. Observed 2026-09-12 against this dataset's five loaded tables. CMEK does not cascade
+  # in Terraform's model even though it does in BigQuery's, which is why the key is named twice.
+  encryption_configuration {
+    kms_key_name = google_kms_crypto_key.cio.id
+  }
+
   schema = jsonencode([
     { name = "client_id", type = "STRING", mode = "REQUIRED" },
     { name = "instrument_id", type = "STRING", mode = "REQUIRED" },
@@ -72,6 +82,16 @@ resource "google_bigquery_table" "client_profiles" {
   table_id            = "client_profiles" # matches settings.yaml bigquery.profile_table
   project             = var.project_id
   deletion_protection = true
+
+  # The dataset's default_encryption_configuration stamps this key onto every table BigQuery
+  # creates in it, so the live table carries an encryption_configuration whether or not this
+  # resource declares one. Leaving it undeclared makes a later plan read the server-set block as
+  # a REMOVAL, and removing it FORCES REPLACEMENT of the table, which destroys every row it
+  # holds. Observed 2026-09-12 against this dataset's five loaded tables. CMEK does not cascade
+  # in Terraform's model even though it does in BigQuery's, which is why the key is named twice.
+  encryption_configuration {
+    kms_key_name = google_kms_crypto_key.cio.id
+  }
 
   schema = jsonencode([
     { name = "client_id", type = "STRING", mode = "REQUIRED" },
@@ -97,6 +117,16 @@ resource "google_bigquery_table" "instruments" {
   project             = var.project_id
   deletion_protection = true
 
+  # The dataset's default_encryption_configuration stamps this key onto every table BigQuery
+  # creates in it, so the live table carries an encryption_configuration whether or not this
+  # resource declares one. Leaving it undeclared makes a later plan read the server-set block as
+  # a REMOVAL, and removing it FORCES REPLACEMENT of the table, which destroys every row it
+  # holds. Observed 2026-09-12 against this dataset's five loaded tables. CMEK does not cascade
+  # in Terraform's model even though it does in BigQuery's, which is why the key is named twice.
+  encryption_configuration {
+    kms_key_name = google_kms_crypto_key.cio.id
+  }
+
   schema = jsonencode([
     { name = "instrument_id", type = "STRING", mode = "REQUIRED" },
     { name = "name", type = "STRING", mode = "REQUIRED" },
@@ -120,6 +150,16 @@ resource "google_bigquery_table" "model_portfolios" {
   project             = var.project_id
   deletion_protection = true
 
+  # The dataset's default_encryption_configuration stamps this key onto every table BigQuery
+  # creates in it, so the live table carries an encryption_configuration whether or not this
+  # resource declares one. Leaving it undeclared makes a later plan read the server-set block as
+  # a REMOVAL, and removing it FORCES REPLACEMENT of the table, which destroys every row it
+  # holds. Observed 2026-09-12 against this dataset's five loaded tables. CMEK does not cascade
+  # in Terraform's model even though it does in BigQuery's, which is why the key is named twice.
+  encryption_configuration {
+    kms_key_name = google_kms_crypto_key.cio.id
+  }
+
   schema = jsonencode([
     { name = "model_id", type = "STRING", mode = "REQUIRED" },
     { name = "risk_appetite", type = "STRING", mode = "REQUIRED" },
@@ -142,6 +182,14 @@ resource "google_bigquery_table" "book_manifest" {
   table_id            = "book_manifest" # matches settings.yaml bigquery.manifest_table
   project             = var.project_id
   deletion_protection = false
+
+  # Declared for the same reason as its siblings above: the dataset stamps its key onto every
+  # table, and an undeclared block reads as a removal, which replaces the table. This one is the
+  # only table of the five a replacement may destroy cheaply, and it was destroyed exactly that
+  # way on 2026-09-12, which is how the guard that reads it learned the dataset held no book.
+  encryption_configuration {
+    kms_key_name = google_kms_crypto_key.cio.id
+  }
 
   schema = jsonencode([
     { name = "book_version", type = "STRING", mode = "REQUIRED" },
