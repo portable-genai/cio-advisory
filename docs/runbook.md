@@ -141,3 +141,29 @@ client-000418` from the same venv; both must cite the loaded `cio-2026q3-...` do
 The build must pass the offline eval gate (merge guard) and the `model-quality-gate` judged gate before
 promotion (R5). Do not promote a build that fails `no_advice_safety` or
 `suitability_accuracy`.
+
+## Terraform state, and the one-time migration
+
+This stack's state lives in the deployment's GCS bucket under the prefix `cio-advisory`;
+`providers.tf` declares the backend partially, so the bucket is an init input:
+
+```bash
+cd infra/terraform
+terraform init -input=false -backend-config=bucket=<state-bucket> -backend-config=prefix=cio-advisory
+terraform plan
+```
+
+Or `make tf-plan TF_STATE_BUCKET=<state-bucket>` from the repository root.
+
+**An installation applied before the backend existed** holds its state in a local, gitignored
+`infra/terraform/terraform.tfstate`, which is the deployment's only record of the
+`wealth_portfolio` dataset, its tables and the KMS key ring. Migrate it once, before any other
+plan, and never start from an empty prefix instead: re-creating the BigQuery dataset that
+already exists fails.
+
+```bash
+terraform init -migrate-state -backend-config=bucket=<state-bucket> -backend-config=prefix=cio-advisory
+terraform plan   # expect no creates for the dataset, its tables or the key ring
+```
+
+Keep the local file until that plan is clean.

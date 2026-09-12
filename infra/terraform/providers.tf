@@ -1,4 +1,5 @@
-# providers.tf : Provider pinning for the B3 CIO Advisory Assistant sovereign deploy.
+# providers.tf : Provider pinning and the state backend for the CIO Advisory Assistant
+# sovereign deploy.
 #
 # General Principle map:
 #   P-03 (data residency / in-country): every provider call is pinned to the Singapore
@@ -11,6 +12,13 @@
 
 terraform {
   required_version = ">= 1.9.0"
+
+  # Partial backend: the bucket and the per-installation prefix are supplied at init, which keeps
+  # the module reusable while making accidental local state impossible in a named deployment.
+  # Local state for a stack that owns a KMS key and the house-views store is the deployment's only
+  # record, held on whichever laptop ran the apply. The offline proof needs no bucket: `make
+  # tf-check` initialises with -backend=false, as the CI runner does.
+  backend "gcs" {}
 
   required_providers {
     google = {

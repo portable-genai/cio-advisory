@@ -142,8 +142,10 @@ ingest-house-views-dry-run: ## Print the house-view documents the loader WOULD w
 ingest-house-views: ## Load the shipped CIO corpus into the managed store through the gcp adapter (needs TENANT).
 	$(PYTHON) scripts/ingest_house_views.py --project $(PROJECT) --tenant $(TENANT)
 
-tf-plan: ## Terraform plan for the asia-southeast1 infrastructure.
-	cd $(TF_DIR) && terraform init -input=false && terraform plan
+tf-plan: ## Plan the asia-southeast1 infrastructure against its GCS state; needs TF_STATE_BUCKET and credentials.
+	cd $(TF_DIR) && terraform init -input=false \
+		"-backend-config=bucket=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET to the GCS state bucket}" \
+		-backend-config=prefix=cio-advisory && terraform plan
 
 tf-check: ## Offline Terraform proof: validate, fmt and the mock-provider plan tests (no credentials).
 	terraform -chdir=$(TF_DIR) init -backend=false -input=false
