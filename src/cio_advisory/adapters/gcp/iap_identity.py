@@ -8,6 +8,18 @@ audience, issuer, expiry) and derives the :class:`Principal` server-side, so aut
 is configured ON the GCP service rather than hand-rolled in the app. The Google SDK imports
 are lazy (mirroring the other gcp adapters) so the SDK-free local/onprem profiles never
 import them, and the verified assertion is never logged.
+
+Behind an embedding host the assertion arrives under a SECOND name, and that is transport
+rather than trust. Google reserves ``x-goog-*`` and the serverless frontend strips the whole
+namespace from a request entering a service, so a host cannot forward the assertion IAP gave it
+under the standard name; it sends the same value as ``x-portal-iap-assertion`` as well, and this
+adapter reads either through the commons selection function. Both take the identical
+verification path. Reading only the reserved name is why this service answered 401 to every
+authenticated caller the day it was deployed as an embedded app.
+
+A refusal AFTER verification is a 403, not a 401. An allowlist that does not name the caller,
+or a tenant the reviewed maps decline to resolve, refuses somebody whose identity is
+established, and "authentication required" is a false statement about them.
 """
 
 from __future__ import annotations
@@ -20,15 +32,17 @@ from hex_service_kit.federation import (
     IAP_ASSERTION_HEADER,
     IAP_ISSUER,
     IAP_KEYS_URL,
+    PORTAL_ASSERTION_HEADER,
     FederationPolicy,
     principal_from_iap_claims,
+    select_assertion,
 )
 from hex_service_kit.identity import IdentityError as AssertionRefused
 
 from ...config import Settings
 from ...domain.identity import IdentityError, Principal, RequestContext
 from ...envread import optional_setting, read_env_setting
-from ...ports.identity import VERIFIED, EndUserAuthUnavailableError
+from ...ports.identity import VERIFIED, AuthorizationRefusedError, EndUserAuthUnavailableError
 
 # This repository's names for the kit's transport facts. They are REBOUND, not re-declared:
 # the header name, the issuer and the key-set URL are the same three strings in every
@@ -39,6 +53,18 @@ from ...ports.identity import VERIFIED, EndUserAuthUnavailableError
 #: ``verify_token`` does not check the issuer at all (``verify_oauth2_token`` is the wrapper
 #: that does), so this adapter checks it itself against the kit's value.
 _ASSERTION_HEADER = IAP_ASSERTION_HEADER
+#: The SAME assertion, forwarded by a same-origin embedding host under a name Google's
+#: serverless frontend does not reserve and therefore does not strip. A FALLBACK for TRANSPORT,
+#: never an alternative trust path: what arrives under it is verified identically, so a caller
+#: gains nothing by choosing it.
+#:
+#: Reading only the reserved name meant this application authenticated NOBODY behind the portal.
+#: The host sets ``x-goog-iap-jwt-assertion``, the serverless frontend strips the whole reserved
+#: namespace on the way in, and the service refuses "request did not pass through IAP" about a
+#: request that passed through IAP one hop earlier. Measured on the live deployment on
+#: 2026-09-12: every route taking a principal answered 401 while every route taking none
+#: answered 200 through the same proxy with the same token.
+_PORTAL_ASSERTION_HEADER = PORTAL_ASSERTION_HEADER
 _IAP_KEYS_URL = IAP_KEYS_URL
 _IAP_ISSUER = IAP_ISSUER
 
@@ -198,13 +224,27 @@ class IapIdentityAdapter:
                 "Google-signed OIDC token from any project or application. Set it to "
                 "the IAP-protected resource, /projects/<NUM>/global/backendServices/<ID>."
             )
-        # Stripped, so a header a proxy rendered blank is ABSENT rather than an
-        # assertion: a whitespace-only value is truthy, so it skipped this refusal
-        # and was refused further down by the algorithm pin instead, which reports a
-        # malformed token for what is actually a missing one.
-        assertion = ctx.header(_ASSERTION_HEADER).strip()
-        if not assertion:
-            raise IdentityError("missing IAP assertion header; request did not pass through IAP")
+        # ONE selection function, in the commons, rather than a fiftieth copy of an `or` chain.
+        # It examines both names an assertion travels under, prefers the edge-injected one, and
+        # strips, so a header a proxy rendered blank is ABSENT rather than an assertion: a
+        # whitespace-only value is truthy, and before it was stripped it skipped this refusal and
+        # was refused further down by the algorithm pin, which reports a malformed token for what
+        # is actually a missing one.
+        #
+        # The keys are lower-cased here rather than assumed. ``RequestContext`` documents them as
+        # lower-cased and ``api/security.py`` supplies them that way, but the selection is a
+        # dictionary lookup rather than ``ctx.header``, and an identity that goes missing because
+        # of header CASE is the same class of silent refusal this line exists to fix.
+        try:
+            source = select_assertion({k.lower(): v for k, v in ctx.headers.items()})
+        except AssertionRefused as exc:
+            # This repository's own sentence, kept so the refusal reads as it always has, with
+            # the commons reason appended because that reason names BOTH headers it examined.
+            # An operator who reads only "missing IAP assertion header" goes to the load
+            # balancer; the one who reads which two names were looked for goes to the hop that
+            # dropped one of them.
+            raise IdentityError(f"missing IAP assertion header: {exc}") from exc
+        assertion = source.assertion
         # The algorithm is judged BEFORE the verifier is handed the token, with no cryptography
         # and no cloud SDK, so the refusal is exercised by the offline gate rather than living
         # inside a library the gate does not install. `alg: none` is an unsigned assertion and
@@ -229,17 +269,40 @@ class IapIdentityAdapter:
         # this repository still declares look-alikes of both in ``domain/identity.py`` instead
         # of re-exporting the commons values. Left unmapped, a refusal from the claim half
         # would not be caught by ``api/security.py`` at all and FastAPI would answer a bare 500
-        # to a caller owed a 401. Both mappings go away when this repository adopts the commons
-        # identity values, which is a separate change and is recorded as one.
+        # to a caller owed a refusal. Both mappings go away when this repository adopts the
+        # commons identity values, which is a separate change and is recorded as one.
+        #
+        # A refusal from the claim half is an AUTHORIZATION refusal, and it is answered 403
+        # rather than 401. By the time control reaches here the assertion has been verified and
+        # ``_refuse_unpinned_claims`` has accepted it, so the caller's identity is established:
+        # what the claim half can still refuse is an allowlist this deployment wrote down or a
+        # tenant its maps decline to resolve. Telling that caller "authentication required" is a
+        # false statement about them, and it is the sentence this service answered through the
+        # portal's IAP edge to a caller IAP had authenticated one hop earlier.
+        #
+        # The classification does not reason about call ORDER, because an argument about order is
+        # exactly the kind of claim that stops being true when somebody moves a line. It re-runs
+        # this adapter's own first defence instead: ``_refuse_unpinned_claims`` requires a
+        # non-blank ``iss``/``sub``/``email``/``exp`` and matches the issuer exactly, which is a
+        # superset of the two authentication-shaped refusals the claim half also makes, so a
+        # claim set that survives it cannot be refused here for an authentication reason. No
+        # message is parsed and no part of the commons decision is copied.
+        #
+        # The policy is built OUTSIDE the try: a malformed reviewed map is a ``ValueError`` about
+        # the deployment, not a refusal of this caller, and it must not be relabelled as one.
+        policy = _federation_policy()
         try:
             resolved = principal_from_iap_claims(
                 claims,
-                _federation_policy(),
+                policy,
                 source="gcp-iap",
                 include_subject_principal=True,
             )
         except AssertionRefused as exc:
-            raise IdentityError(str(exc)) from exc
+            self._refuse_unpinned_claims(claims)
+            raise AuthorizationRefusedError(
+                f"authenticated, and this deployment admits you nothing: {exc}"
+            ) from exc
         return Principal(
             subject=resolved.subject,
             principals=resolved.principals,

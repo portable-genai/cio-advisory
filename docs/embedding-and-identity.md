@@ -35,7 +35,7 @@ Pick the cheapest shape the host can actually satisfy.
 
 | # | Shape | Use when the host... | Host work | Identity |
 |---|-------|----------------------|-----------|----------|
-| 1 | **Embedded, same-origin reverse proxy** | controls its own edge (nginx or Next.js rewrites) and can federate its IdP into Cloud IAP. | Two proxy routes (`/advisory/*`, `/advisory/api/*`) plus one `<iframe src="/advisory/">`. | IAP-verified `x-goog-iap-jwt-assertion` (`adapters/gcp/iap_identity.py`); the proxy forwards the header. |
+| 1 | **Embedded, same-origin reverse proxy** | controls its own edge (nginx or Next.js rewrites) and can federate its IdP into Cloud IAP. | Two proxy routes (`/advisory/*`, `/advisory/api/*`) plus one `<iframe src="/advisory/">`. | IAP-verified assertion (`adapters/gcp/iap_identity.py`); the host forwards it under **both** names, because one of them does not survive the hop (see 6a). |
 | 2 | **Standalone behind Cloud IAP** | has no host app, or wants a separate console at its own URL. | DNS plus HTTPS load balancer plus IAP. | IAP-verified assertion; IAP plus Workforce Identity Federation gives silent SSO. |
 | 3 | **Local dev, no auth** | is evaluating offline, no IdP. | None. | Seeded dev personas via `X-Dev-Persona` (`adapters/local/identity.py`). |
 
@@ -235,7 +235,9 @@ trusts a client-asserted actor.
 
 - `get_principal` (`api/security.py`) builds a `RequestContext` from inbound headers only,
   asks the active `IdentityPort` adapter to resolve a verified `Principal`, and a failure is a
-  hard `401`.
+  refusal whose status says **which** failure it was: `401` when the caller's identity could not
+  be established, `403` when it was established and this deployment admits them nothing, `503`
+  when the deployment can authenticate nobody at all. See 6b.
 - Every artifact route takes `principal: CurrentPrincipal` and passes `actor=principal.actor`
   into the advisory service. The request schemas (`ClientRequest`, `SuitabilityRequest` in
   `api/schemas.py`) carry no `actor` field, so any client-supplied identity is ignored.
@@ -248,12 +250,60 @@ The active profile selects the adapter, exactly like every other port:
 | Profile | Adapter | What it does |
 |---------|---------|--------------|
 | `local` | `LocalPersonaIdentityAdapter` | Offline dev/test identity via `X-Dev-Persona`, no IdP. Default persona when the header is absent; an unknown id is a `401`. |
-| `gcp` / `platform` | `IapIdentityAdapter` | Verifies the signed `x-goog-iap-jwt-assertion` (signature, issuer, audience, expiry) against Google's IAP public keys. `tenant` from `CIO_IAP_TENANT_DOMAINS_JSON` (or `CIO_IAP_MACHINE_TENANTS_JSON` for a service account), else the `hd` claim; roles from `CIO_IAP_GROUPS_JSON`. Audience from `CIO_IAP_AUDIENCE`; the assertion is never logged. |
+| `gcp` / `platform` | `IapIdentityAdapter` | Verifies the signed assertion (signature, issuer, audience, expiry) against Google's IAP public keys, read from either name it travels under (6a). `tenant` from `CIO_IAP_TENANT_DOMAINS_JSON` (or `CIO_IAP_MACHINE_TENANTS_JSON` for a service account), else the `hd` claim; roles from `CIO_IAP_GROUPS_JSON`. Audience from `CIO_IAP_AUDIENCE`; the assertion is never logged. |
 | `onprem` | `OnPremIdentityAdapter` | Fail-closed placeholder: raises `NotImplementedError` rather than returning an anonymous identity. Implement verification against your own enterprise IdP (OIDC/SAML) here. |
 
 Defense in depth (PEP): the edge (Cloud IAP / Apigee) authenticates at ingress, the `agent-guardrail-gateway` applies central policy, and this backend independently re-verifies the assertion and
 derives identity itself. Each layer assumes the others may be bypassed. This is the seam that
 defeats actor spoofing and the confused-deputy risk.
+
+### 6a. The two names one assertion travels under
+
+Behind an embedding host the assertion does **not** arrive under the name IAP injected it with.
+`x-goog-*` is Google's reserved namespace, and the serverless frontend strips the whole namespace
+from a request entering a service so that only the platform can set it. A host behind IAP
+therefore cannot forward what its own edge handed it: the host sets
+`x-goog-iap-jwt-assertion`, the frontend drops it, and the service refuses "request did not pass
+through IAP" about a request that passed through IAP one hop earlier.
+
+So the host also sends the same value as **`x-portal-iap-assertion`**, a name the platform does
+not reserve, and `adapters/gcp/iap_identity.py` reads either one through
+`hex_service_kit.federation.select_assertion`. Two properties make that safe, and both are
+pinned by `tests/unit/test_embedded_assertion_transport.py`:
+
+- The edge-injected name still **wins** when both are present. That is about diagnosis, not
+  trust: the direct edge's assertion is the one whose audience matches without any forwarding.
+- The fallback buys **no relaxation**. Either name takes the identical verification path, so a
+  caller gains nothing by choosing one. The header is transport; it vouches for nothing.
+
+This was measured, not reasoned about. Deployed as an embedded app on 2026-09-12, reading only
+the reserved name, this service answered `401 {"detail":"authentication required"}` on every
+route taking a principal, through both hosts, to a caller IAP had authenticated at the edge,
+while every route taking no principal answered `200` through the same proxy with the same token.
+Nothing was wrong with the audience, the maps, the proxy or the edge.
+
+### 6b. What each refusal status means
+
+A refusal that cannot say which half failed sends the reader at the wrong layer, which is how the
+defect above survived a configuration review.
+
+| Status | Means | Where it is decided |
+|--------|-------|---------------------|
+| `401` "authentication required" | This caller's identity could not be established: no assertion under either name, an unpinned algorithm, a signature or audience that did not verify, a missing or blank required claim, a foreign issuer. | `IdentityError` from `adapters/gcp/iap_identity.py`, mapped in `api/security.py`. |
+| `403` and the reason | The caller **authenticated** and this deployment admits them nothing: an allowlist (`allowed_machine_subjects` / `allowed_human_subjects`) that does not name them, or a tenant the reviewed maps decline to resolve with `refuse_unmapped_tenant` set. | `AuthorizationRefusedError` (`ports/identity.py`), raised where the claim half refuses a caller whose assertion this adapter already accepted. |
+| `503` and the variable's name | **Nobody** can authenticate here: `CIO_IAP_AUDIENCE` unset, or `google-auth` not installed. No credential would have helped. | `EndUserAuthUnavailableError` subclasses (`adapters/gcp/iap_identity.py`). |
+
+`403` carries its reason because the fix is a reviewed map in the deployment and the caller
+cannot guess which one; `401` stays bare, because an unauthenticated caller learning which
+assertion would have worked is being handed the next thing to forge.
+
+The `403` path is reachable only where the deployment turns a knob on. This deployment leaves
+`refuse_unmapped_tenant` off, so an unmapped caller still resolves to an empty tenant and is
+fail-closed by entitlement filtering rather than refused outright. That is a deliberate posture
+and not an oversight: turning it on would refuse a legitimately tenant-less caller (a federated
+or personal account the edge admits) instead of showing them untagged public data. What the
+status split guarantees is that **whenever** such a caller is refused, they are not told to
+authenticate again.
 
 ---
 
