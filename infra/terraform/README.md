@@ -44,7 +44,7 @@ provisions the standalone `gcp` profile's own house-view store (`house_views.tf`
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # then edit ids; region defaults to asia-southeast1
 
-terraform init
+terraform init -input=false -backend-config=bucket=<state-bucket> -backend-config=prefix=cio-advisory
 terraform plan
 terraform apply
 ```
@@ -63,6 +63,30 @@ resource) and wire the outputs into `config/settings.yaml`:
 ```bash
 terraform output    # copy kms_key, portfolio_dataset, templates, service accounts...
 ```
+
+## State
+
+`providers.tf` declares a partial `backend "gcs" {}`. The bucket and the prefix are init inputs,
+never code: `<state-bucket>` is the deployment's state bucket, which every other deployed stack
+shares under its own prefix, and this stack's prefix is `cio-advisory`. Local state for a stack
+that owns a KMS key, the BigQuery dataset and the house-view store is the deployment's only
+record of them, sitting on whichever laptop ran the apply, so a named deployment does not keep
+it. The offline proof never touches the bucket: `make tf-check` runs
+`terraform init -backend=false` before `validate`, `fmt -check` and `test`.
+
+**Migrate existing local state once. Never re-create it.** An installation applied before the
+backend was declared holds its state in a gitignored `terraform.tfstate` in this directory,
+recording the `wealth_portfolio` dataset and its tables, the KMS key ring and key, and the
+enabled services. From the directory holding that file, with credentials:
+
+```bash
+terraform init -migrate-state -backend-config=bucket=<state-bucket> -backend-config=prefix=cio-advisory
+terraform plan   # expect no creates for the dataset, its tables or the key ring
+```
+
+Answer `yes` when init offers to copy the existing state into the bucket. Starting from an empty
+prefix instead plans the dataset and the key ring as new, and both creates fail because both
+already exist. Keep the local file until the migrated plan shows none of those creates.
 
 ## The house-view store
 
