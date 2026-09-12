@@ -21,6 +21,7 @@ locals {
     "run.googleapis.com",                  # Cloud Run job / app host
     "secretmanager.googleapis.com",        # App secrets (no secrets in code, P-04)
     "cloudkms.googleapis.com",             # Regional CMEK key ring (P-09)
+    "artifactregistry.googleapis.com",     # Registry the promoted API and console images live in
     "accesscontextmanager.googleapis.com", # VPC Service Controls perimeter (P-03)
     "assuredworkloads.googleapis.com",     # Assured Workloads (sovereignty controls, P-03)
     # Supporting services the above transitively require.
