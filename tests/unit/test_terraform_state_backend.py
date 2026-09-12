@@ -91,8 +91,7 @@ def test_the_offline_terraform_proof_never_initialises_the_backend() -> None:
     inits = _init_commands(recipe)
     assert inits, f"tf-check must initialise Terraform. Recipe: {recipe!r}"
     assert all("-backend=false" in command for command in inits), (
-        "every terraform init in the offline target must pass -backend=false. "
-        f"Found: {inits}"
+        f"every terraform init in the offline target must pass -backend=false. Found: {inits}"
     )
     assert re.search(r"terraform(?:\s+-chdir=\S+)?\s+validate", recipe), recipe
     assert re.search(r"terraform(?:\s+-chdir=\S+)?\s+test", recipe), recipe
