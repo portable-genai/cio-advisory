@@ -34,7 +34,7 @@ flowchart TB
   end
 
   subgraph GCP["adapters/gcp (managed, lazy SDK)"]
-    G1["File Search · BigQuery · Gemini"]
+    G1["Agent Search · BigQuery · Gemini"]
     G2["Model Armor · DLP"]
     G3["Cloud Logging WORM · Cloud Trace · Gen AI eval"]
   end
@@ -72,7 +72,7 @@ port, that `onprem` fails fast, and that `local` answers in-process.
 
 | Port | gcp | local | platform | onprem |
 |---|---|---|---|---|
-| `house_view` | File Search | SQLite FTS5 (BM25) | `enterprise-knowledge-base` `/v1/search` | placeholder |
+| `house_view` | Agent Search (`us`) | SQLite FTS5 (BM25) | `enterprise-knowledge-base` `/v1/search` | placeholder |
 | `portfolio` | BigQuery | DuckDB (same tables) | n/a (internal data) | placeholder |
 | `llm` | Gemini | deterministic schema-driven | n/a | placeholder |
 | `grounding` | `google_search` | disabled (no egress) | n/a | placeholder (off) |

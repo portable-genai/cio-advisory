@@ -12,6 +12,12 @@ allowed_regions = ["asia-southeast1"]
 region          = "asia-southeast1"
 zone            = "asia-southeast1-a"
 
+# Agent Search location of the house-view store. NOT the region: Agent Search serves only
+# global, us and eu. The API must read the same value, so copy output house_views_api_env
+# (CIO_HOUSE_VIEWS_LOCATION) into its environment. Where manage_org_policies is true this is
+# also the second location group the stack's own gcp.resourceLocations admits.
+house_views_location = "us"
+
 # ~7-year WORM retention for the audit log (P-08). Bucket lock is irreversible.
 retention_days = 2557
 
@@ -32,7 +38,9 @@ worm_locked = true
 
 # Shared-project declines. A deployment sharing its project with a stack that already owns the
 # Org Policies, the data-access audit config and the perimeter declines all three, and a region
-# that does not serve the malicious-URI filter narrows the guardrail (asia-southeast1 does not):
+# that does not serve the malicious-URI filter narrows the guardrail (asia-southeast1 does not).
+# The project's own policies must admit the house-view store's location (in:us-locations for
+# the default) or the store is refused at apply:
 # manage_org_policies           = false
 # manage_audit_config           = false
 # enable_vpc_sc                 = false

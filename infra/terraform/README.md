@@ -3,7 +3,10 @@
 This module provisions the full **Singapore-resident** managed stack for the `cio-advisory` CIO
 Advisory Assistant. Every resource takes its location from `var.region`, which is chosen
 at deploy time and validated against the `allowed_regions` residency allowlist (default
-`["asia-southeast1"]`); only `project_id` and a few genuinely per-tenant values are variables.
+`["asia-southeast1"]`), with one exception the service forces: the house-view store sits at
+`house_views_location` (default `us`), because Agent Search serves only `global`, `us` and `eu`
+(see [The house-view store](#the-house-view-store)). Only `project_id` and a few genuinely
+per-tenant values are variables.
 
 It maps directly to the pinned stack in `SPEC.md §3`:
 
@@ -61,6 +64,38 @@ resource) and wire the outputs into `config/settings.yaml`:
 terraform output    # copy kms_key, portfolio_dataset, templates, service accounts...
 ```
 
+## The house-view store
+
+`house_views.tf` creates the Agent Search data store `cio-house-views` and the engine
+`cio-advisory-engine` the standalone `gcp` profile searches. Agent Search has no Cloud-region
+location, only `global`, `us` and `eu`, so the store cannot sit in `var.region`:
+`house_views_location` places it, validated to those three, default `us` (one named
+jurisdiction; `global` names none and a residency Org Policy refuses it when a document is
+written). This is the stack's one disclosed residency exception: the fictional CIO corpus and
+its index live there, the client book stays in the region.
+
+**The API must read the same location.** `config/settings.yaml` reads it from
+`CIO_HOUSE_VIEWS_LOCATION`, default `us`; the output `house_views_api_env` is exactly that
+variable and value, to copy into the API's environment (the portal's `api_env` for an embedded
+deployment). `tests/contract/test_house_view_store_location.py` fails the build when the two
+defaults, the allowed values or the store and engine ids drift apart, and `make tf-check`
+refuses a Cloud region and proves the engine follows the store.
+
+**It is created empty.** `scripts/ingest_house_views.py` fills it through the API's own adapter
+(`docs/runbook.md`, "The house-view store"): `make ingest-house-views PROJECT=<id>
+TENANT=<tenant>`, where the tenant is the one the deployment's identity adapter resolves.
+
+**CMEK.** The store carries no customer-managed key. Agent Search accepts only a `us` or `eu`
+key registered to the location before the store exists, on Enterprise edition; the regional key
+in `kms.tf` can never be one and the engine is Standard tier, so the store uses Google-managed
+encryption and `org_policy.tf` leaves `discoveryengine.googleapis.com` out of the services
+`restrictNonCmekServices` denies.
+
+**Org Policies.** Where this stack writes them (`manage_org_policies = true`),
+`gcp.resourceLocations` admits exactly two values: `in:<region>-locations` and the store's
+location group (`in:us-locations` by default, `global` as a literal). In a shared project the
+owner's policy must admit the store's location or the apply is refused.
+
 ## Deploying into a shared project under `journey-portal`
 
 The portal creates the `journey-cio-advisory-api` and `journey-cio-advisory-ui` Cloud Run services
@@ -75,6 +110,7 @@ variable:
 | VPC-SC perimeter | `enable_vpc_sc` | `false` | A second regular perimeter would enforce where the owner observes |
 | Model Armor malicious-URI filter | `model_armor_full_capabilities` | `false` in `asia-southeast1` | The region does not serve it and refuses the whole template |
 | WORM lock on the audit bucket | `worm_locked` (no default) | a deliberate `true` or `false` | Irreversible when true |
+| House-view store location | `house_views_location` | `us` (the default), and the owner's `gcp.resourceLocations` must admit `in:us-locations` | Agent Search serves no region; the API reads the same value from `CIO_HOUSE_VIEWS_LOCATION` |
 
 `additional_serving_service_accounts` names the portal's API runtime identity, which the portal
 mints on its own apply. Apply in two passes: this stack with the list empty, then the portal, then
@@ -90,6 +126,9 @@ as build arguments, because Next.js inlines both at build time.
 mapping each sign-in domain to the tenant the client book was loaded under, and
 `CIO_IAP_GROUPS_JSON` granting an advisory role such as `group:cio-analyst`. Without the two maps
 every verified user resolves to their own domain, holds no role, and is refused every client.
+Add `CIO_HOUSE_VIEWS_LOCATION` from `terraform output house_views_api_env` whenever
+`house_views_location` is not the default, and load the house views under the same tenant the
+domain map resolves.
 
 `make tf-check` proves every decline above offline, with mock providers and no credentials.
 
@@ -99,12 +138,13 @@ every verified user resolves to their own domain, holds no role, and is refused 
   `worm_locked = true`, and the variable has no default, so every deployment names it. Once
   applied true you cannot reduce retention or delete the bucket for the retention window
   (`retention_days`, default 2557 days, roughly 7 years), not even as project owner.
-- **The house-view store has no deployable location yet.** Agent Search serves only `global`,
-  `us` and `eu`, and `house_views.tf` places the store in `var.region`, which it does not serve.
-  An apply of the data store and its search engine fails until a location is chosen.
-- **CMEK does not cascade.** All data-bearing services (BigQuery, Agent Search, Agent
-  Runtime, Logging) get an explicit binding to the single regional CMEK in `kms.tf`.
-  `org_policy.tf` adds `restrictNonCmekServices` as a backstop.
+- **The house-view store is outside the region.** Agent Search serves only `global`, `us` and
+  `eu`; the store sits at `house_views_location` (default `us`) and the API must read the same
+  value. See [The house-view store](#the-house-view-store).
+- **CMEK does not cascade.** The data-bearing services that accept a regional key (BigQuery,
+  Agent Runtime, Logging) get an explicit binding to the single regional CMEK in `kms.tf`.
+  Agent Search does not accept one, so the house-view store is Google-managed and is the one
+  service `org_policy.tf`'s `restrictNonCmekServices` backstop does not cover.
 - **Synthetic data only by default.** The portfolio/profile tables created here are empty;
   the sample client data shipped with this repo is fictional. Do not load live client data
   without sign-off (see `COMPLIANCE.md`).

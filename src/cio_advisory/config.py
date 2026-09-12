@@ -162,14 +162,40 @@ class ModelSettings:
     use_hard_reasoning: bool = False
 
 
+#: The locations Agent Search (Discovery Engine) serves, and the only values a house-view store
+#: location may take. No Cloud region is among them: a store at ``asia-southeast1`` cannot be
+#: created, and a client pointed at one addresses a host that does not exist.
+#: ``infra/terraform/variables.tf`` validates ``house_views_location`` against the same three,
+#: and ``tests/contract/test_house_view_store_location.py`` fails when the two lists differ.
+AGENT_SEARCH_LOCATIONS: tuple[str, ...] = ("global", "us", "eu")
+
+
+def agent_search_location(location: str) -> str:
+    """Return ``location`` when Agent Search serves it; refuse anything else before any call."""
+    if location not in AGENT_SEARCH_LOCATIONS:
+        allowed = ", ".join(AGENT_SEARCH_LOCATIONS)
+        raise ValueError(
+            f"house-view store location {location!r} is not an Agent Search location; "
+            f"expected one of: {allowed}. A Cloud region is never one."
+        )
+    return location
+
+
 @dataclass(frozen=True)
 class HouseViewSettings:
-    # A2 governed KB is the production retrieval backend; these settings describe the
-    # GCP File Search / Agent Search store used when running B3 standalone (gcp profile).
+    # The governed enterprise-knowledge-base is the platform retrieval backend; these settings
+    # describe the Agent Search store the standalone gcp profile searches and
+    # scripts/ingest_house_views.py fills. ``location`` is read from CIO_HOUSE_VIEWS_LOCATION
+    # (config/settings.yaml) and must equal the Terraform stack's house_views_location: the two
+    # halves disagreeing about where the store lives is a 404 at the first briefing, never a
+    # plan error.
     data_store_id: str = "cio-house-views"
-    location: str = "asia-southeast1"
+    location: str = "us"
     serving_config: str = "default_search"
     engine_id: str = "cio-advisory-engine"
+
+    def __post_init__(self) -> None:
+        agent_search_location(self.location)
 
 
 @dataclass(frozen=True)

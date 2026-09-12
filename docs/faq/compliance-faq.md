@@ -77,7 +77,10 @@ hand-maintain the mapping.
 
 Yes, at deploy time: a single in-country region (default `asia-southeast1` / Singapore),
 validated to fail fast, with regional endpoints, a `gcp.resourceLocations` Org Policy
-allowlist, CMEK bound per data-bearing service, and a VPC-SC perimeter (P-03, P-09). The
+allowlist, CMEK bound per data-bearing service, and a VPC-SC perimeter (P-03, P-09). One
+resource is disclosed as outside it: the standalone profile's house-view index, which Agent
+Search serves only at `global`, `us` or `eu` and which takes no regional key
+(`infra/terraform/README.md`, "The house-view store"). The
 residency-violation CI gate is the sibling `architecture-validator`
 (`domain/residency/`); the exit / concentration-risk plan is `operational-resilience-mapping` (`domain/concentration_exit/`). This repo enforces residency in
 its own infra and is one of the systems those tools reason about.

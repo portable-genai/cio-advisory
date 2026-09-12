@@ -4,7 +4,9 @@
 
 Grounded, suitability-checked, **decision-support** talking points for private-bank
 relationship managers (RMs), built ports-and-adapters on the Gemini Enterprise Agent
-Platform and pinned to `asia-southeast1` (Singapore) for residency.
+Platform and pinned to `asia-southeast1` (Singapore) for residency. The standalone profile's
+house-view store is the one disclosed exception: Agent Search serves only `global`, `us` and
+`eu`, so it sits at `us` by default ([infra/terraform/README.md](infra/terraform/README.md)).
 
 > **This is decision-support, NOT financial advice.** Every output is suitability-tagged,
 > carries a non-advice disclaimer, and is maker-checker gated. The RM is the human checker
@@ -105,7 +107,7 @@ on-prem migration message: those adapters are fail-fast placeholders.
 For the in-process stores (sessions, memory, registry) the local adapters route to
 Google's official Firestore emulator when `FIRESTORE_EMULATOR_HOST` is set AND the `[gcp]`
 extra is installed; the google client is imported lazily, only on that branch, so the
-default path stays SDK-free. There is no emulator for File Search, Gemini, Model Armor or
+default path stays SDK-free. There is no emulator for Agent Search, Gemini, Model Armor or
 DLP, so those always use the SDK-free workaround.
 
 ## Profiles

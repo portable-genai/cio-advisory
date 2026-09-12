@@ -82,6 +82,16 @@ run "a_sibling_stack_in_a_shared_project_declines_what_it_does_not_own" {
     ])
     error_message = "The embedding host's identity must hold every role a briefing reaches: models, house views, queries, DLP templates and the guardrail."
   }
+
+  assert {
+    condition     = google_discovery_engine_data_store.house_views.location == "us" && google_discovery_engine_search_engine.house_views.location == "us"
+    error_message = "With no override the house-view store and its engine must sit at `us`, the Agent Search location the API defaults to, never at the deploy region."
+  }
+
+  assert {
+    condition     = output.house_views_api_env == { CIO_HOUSE_VIEWS_LOCATION = "us" }
+    error_message = "The API environment the stack hands its host must name the location the store was created at."
+  }
 }
 
 run "a_fork_on_its_own_project_keeps_every_control" {
@@ -121,6 +131,21 @@ run "a_fork_on_its_own_project_keeps_every_control" {
     condition     = length(google_project_iam_member.additional_serving) == 0 && length(google_bigquery_dataset_iam_member.additional_serving) == 0
     error_message = "An app deployed on its own must grant nothing to identities it did not create."
   }
+
+  assert {
+    condition     = google_org_policy_policy.resource_locations[0].spec[0].rules[0].values[0].allowed_values == tolist(["in:asia-southeast1-locations", "in:us-locations"])
+    error_message = "The residency policy this stack writes must admit exactly the deploy region's group and the house-view store's location group: one alone refuses the stack's own store, a third is a jurisdiction nobody asked for."
+  }
+
+  assert {
+    condition     = !contains(google_org_policy_policy.restrict_cmek_projects[0].spec[0].rules[0].values[0].denied_values, "discoveryengine.googleapis.com")
+    error_message = "restrictNonCmekServices must not deny Agent Search: the house-view store carries no key (a regional key cannot be one), so denying the service refuses the stack's own store."
+  }
+
+  assert {
+    condition     = contains(google_org_policy_policy.restrict_cmek_projects[0].spec[0].rules[0].values[0].denied_values, "bigquery.googleapis.com")
+    error_message = "The CMEK backstop must still cover the client book."
+  }
 }
 
 run "a_locked_bucket_refuses_a_short_window" {
@@ -145,4 +170,68 @@ run "an_embedding_identity_must_be_a_service_account" {
   }
 
   expect_failures = [var.additional_serving_service_accounts]
+}
+
+run "the_house_view_store_refuses_a_location_agent_search_does_not_serve" {
+  command = plan
+
+  variables {
+    worm_locked          = false
+    enable_vpc_sc        = false
+    manage_org_policies  = false
+    house_views_location = "asia-southeast1"
+  }
+
+  expect_failures = [var.house_views_location]
+}
+
+run "the_house_view_store_and_its_engine_follow_the_location_variable" {
+  command = plan
+
+  variables {
+    worm_locked          = false
+    enable_vpc_sc        = false
+    manage_org_policies  = false
+    house_views_location = "eu"
+  }
+
+  assert {
+    condition     = google_discovery_engine_data_store.house_views.location == "eu" && google_discovery_engine_search_engine.house_views.location == "eu"
+    error_message = "The store and its engine must both sit wherever house_views_location names; an engine at another location searches nothing."
+  }
+
+  assert {
+    condition     = output.house_views_api_env == { CIO_HOUSE_VIEWS_LOCATION = "eu" }
+    error_message = "The API environment must follow the store when the location is overridden, or the API queries where the store is not."
+  }
+}
+
+run "the_residency_policy_follows_the_store_location_it_admits" {
+  command = plan
+
+  variables {
+    worm_locked          = false
+    enable_vpc_sc        = false
+    house_views_location = "eu"
+  }
+
+  assert {
+    condition     = google_org_policy_policy.resource_locations[0].spec[0].rules[0].values[0].allowed_values == tolist(["in:asia-southeast1-locations", "in:eu-locations"])
+    error_message = "When the store moves, the location group the stack's own policy admits must move with it, or the policy refuses the store it was applied beside."
+  }
+}
+
+run "a_global_store_is_admitted_by_the_literal_not_a_group" {
+  command = plan
+
+  variables {
+    worm_locked          = false
+    enable_vpc_sc        = false
+    house_views_location = "global"
+  }
+
+  assert {
+    condition     = google_org_policy_policy.resource_locations[0].spec[0].rules[0].values[0].allowed_values == tolist(["in:asia-southeast1-locations", "global"])
+    error_message = "`global` belongs to no location group; the policy must name the literal."
+  }
 }

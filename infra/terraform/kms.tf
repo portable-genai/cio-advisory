@@ -3,9 +3,10 @@
 # General Principle map:
 #   P-09 (CMEK does NOT cascade): a CMEK on one resource does not automatically protect data
 #         that resource hands to another service. Each managed service (BigQuery, Agent
-#         Search, Agent Runtime, Logging) must be told to use this key explicitly. We keep
-#         ONE regional key ring + crypto key here and wire it into every resource that
-#         supports CMEK in its own file.
+#         Runtime, Logging) must be told to use this key explicitly. We keep ONE regional key
+#         ring + crypto key here and wire it into every resource that supports CMEK in its own
+#         file. Agent Search is not one of them: it accepts only a `us` or `eu` key, never a
+#         regional one, so the house-view store is not keyed here (see house_views.tf).
 #   P-03 (residency): the key ring location is asia-southeast1 : a regional key, never the
 #         global/multi-region key. Regional CMEK pins crypto material in-country.
 
@@ -47,13 +48,6 @@ resource "google_kms_crypto_key_iam_member" "bigquery" {
   crypto_key_id = google_kms_crypto_key.cio.id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:bq-${data.google_project.this.number}@bigquery-encryption.iam.gserviceaccount.com"
-}
-
-# Discovery Engine (Agent Search) service agent.
-resource "google_kms_crypto_key_iam_member" "discoveryengine" {
-  crypto_key_id = google_kms_crypto_key.cio.id
-  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  member        = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-discoveryengine.iam.gserviceaccount.com"
 }
 
 # Vertex AI / Agent Runtime service agent.
