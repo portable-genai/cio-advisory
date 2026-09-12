@@ -30,6 +30,17 @@ output "portfolio_dataset_location" {
   value       = google_bigquery_dataset.wealth_portfolio.location
 }
 
+# ------------------------------- Agent Search ------------------------------- #
+output "house_views_data_store" {
+  description = "House-view data store id (settings.yaml house_views.data_store_id)."
+  value       = google_discovery_engine_data_store.house_views.data_store_id
+}
+
+output "house_views_api_env" {
+  description = "The API environment that points retrieval at the store this stack created; an embedding host copies it into the app's api_env."
+  value       = { CIO_HOUSE_VIEWS_LOCATION = google_discovery_engine_data_store.house_views.location }
+}
+
 # ------------------------------- WORM logging ------------------------------- #
 output "log_bucket" {
   description = "Audit log bucket id (settings.yaml logging.bucket); WORM-locked only when worm_locked = true."

@@ -146,11 +146,11 @@ variable "manage_org_policies" {
     same project already owns them: two stacks declaring the same project-level policy is a
     last-writer-wins race, and the loser is whichever application needed the wider boundary.
 
-    In a shared project that is not hypothetical. This stack derives the STRICTEST location form
-    from its own region, so applying it narrows gcp.resourceLocations to that region and breaks
-    every sibling that reaches another one, and restrictNonCmekServices refuses any sibling's
-    BigQuery, Agent Search or Logging resource that is not CMEK-encrypted. Nothing in this
-    stack's plan says so.
+    In a shared project that is not hypothetical. This stack derives its location allowlist from
+    its own region and its own house-view store location, so applying it narrows
+    gcp.resourceLocations to those two and breaks every sibling that reaches another one, and
+    restrictNonCmekServices refuses any sibling's BigQuery or Logging resource that is not
+    CMEK-encrypted. Nothing in this stack's plan says so.
   EOT
 }
 
@@ -207,5 +207,33 @@ variable "additional_serving_service_accounts" {
       can(regex("^[a-z0-9-]+@[a-z0-9-]+\\.iam\\.gserviceaccount\\.com$", email))
     ])
     error_message = "each additional_serving_service_accounts entry must be a service-account email."
+  }
+}
+
+variable "house_views_location" {
+  type        = string
+  default     = "us"
+  description = <<-EOT
+    Agent Search location of the house-view data store and its search engine. NOT var.region.
+
+    Agent Search serves `global`, `us` and `eu` and no Cloud region, so a store placed at the
+    deploy region cannot be created and a client addressing one reaches a host that does not
+    exist. `us` confines the fictional corpus and its index to one named jurisdiction. `global`
+    names none, and a project that enforces gcp.resourceLocations refuses it when a document is
+    written or searched, not only when the store is created.
+
+    The API reads the same value from CIO_HOUSE_VIEWS_LOCATION (output house_views_api_env), and
+    scripts/ingest_house_views.py writes to it. The application's default equals this default,
+    and tests/contract/test_house_view_store_location.py fails when the two defaults or the
+    allowed values differ.
+
+    Where this stack writes the project's Org Policies (manage_org_policies), this location is
+    the second value gcp.resourceLocations admits beside the region's own group, so changing it
+    is a residency statement as much as a placement: the policy follows it (org_policy.tf).
+  EOT
+
+  validation {
+    condition     = contains(["global", "us", "eu"], var.house_views_location)
+    error_message = "house_views_location must be one of global, us, eu: the only locations Agent Search serves. A Cloud region such as asia-southeast1 is not one."
   }
 }

@@ -23,13 +23,14 @@ or generating anything, so a denied caller gets neither PII nor a briefing.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from .errors import ClientAccessDeniedError
 from .identity import Principal
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from .models import ClientProfile
+    from .models import ClientProfile, HouseView
 
 #: Roles whose members may work on clients (within their own tenant). Deployments with
 #: finer-grained needs provision explicit ``client:<id>`` entitlements instead.
@@ -75,3 +76,22 @@ def assert_may_access_client(
             f"{principal.actor} is not entitled to client {profile.id!r} "
             "(no explicit client grant and no advisory role in the client's tenant)"
         )
+
+
+def visible_house_views(principal: Principal, house_views: Iterable[HouseView]) -> list[HouseView]:
+    """The house views ``principal`` may be briefed from, in retrieval order.
+
+    A house view that names a tenant is that tenant's CIO publication, and only a principal
+    verified into the same tenant sees it. An untagged view is public research any principal may
+    see, which is what every shipped offline corpus is. Fail-closed on the principal's side: a
+    principal with no tenant sees untagged views only, never every tenant's.
+
+    Applied by the service after retrieval rather than left to each adapter, so one rule holds
+    in every profile and a store that returns another tenant's document cannot put it in a
+    briefing.
+    """
+    return [
+        view
+        for view in house_views
+        if not view.tenant or (bool(principal.tenant) and view.tenant == principal.tenant)
+    ]

@@ -21,7 +21,10 @@ verdict and citations, for the RM to weigh and sign off.
 ## 2. Configuration & profiles
 
 - **Region pinned** to `asia-southeast1` (Singapore) for residency. There is no global
-  fallback.
+  fallback. The standalone house-view store is the one resource outside the region: Agent
+  Search serves only `global`, `us` and `eu`, so `infra/terraform/house_views.tf` places it at
+  `house_views_location` (default `us`) and the API reads the same value from
+  `CIO_HOUSE_VIEWS_LOCATION`; `infra/terraform/README.md` owns the detail.
 - **Profiles** (env `CIO_PROFILE`, production default `gcp`): `gcp` (managed stack),
   `local` (a WORKING offline laptop stack, what dev/test/CI set explicitly), `platform` (delegate to
   sibling `agent-guardrail-gateway`, `enterprise-knowledge-base`, `agent-registry`, `model-quality-gate`, `agent-observability` services over HTTP), `onprem` (fail-fast placeholder adapters, the

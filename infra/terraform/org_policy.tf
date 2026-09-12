@@ -14,7 +14,12 @@
 # constraint, so in a project another stack already governs these are declined rather than
 # fought over: see that variable for what applying them into a shared project would break.
 
-# Master residency policy: only allow locations inside the selected var.region.
+# Master residency policy: the selected var.region's location group, plus the ONE location the
+# house-view store needs. Agent Search serves no Cloud region (house_views.tf), so a policy that
+# admitted the region alone would refuse this stack's own store at apply; the stack states the
+# two-location posture it actually has instead, and the tftest holds the list to exactly these.
+# Narrowing it back to one jurisdiction means not holding the store: retrieve through the
+# platform profile's governed knowledge base instead.
 resource "google_org_policy_policy" "resource_locations" {
   count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/gcp.resourceLocations"
@@ -23,7 +28,7 @@ resource "google_org_policy_policy" "resource_locations" {
   spec {
     rules {
       values {
-        allowed_values = ["in:${var.region}-locations"]
+        allowed_values = distinct(["in:${var.region}-locations", local.house_views_location_policy_value])
       }
     }
   }
@@ -62,6 +67,10 @@ resource "google_org_policy_policy" "uniform_bucket_access" {
 }
 
 # Restrict which services may skip CMEK : keep crypto in this project/region.
+#
+# discoveryengine.googleapis.com is deliberately NOT denied. Agent Search takes only a `us` or `eu`
+# key registered ahead of the store, on Enterprise edition, so the house-view store carries no
+# key (house_views.tf, P-09) and a policy denying the service would refuse the stack's own store.
 resource "google_org_policy_policy" "restrict_cmek_projects" {
   count  = var.manage_org_policies ? 1 : 0
   name   = "projects/${var.project_id}/policies/gcp.restrictNonCmekServices"
@@ -72,7 +81,6 @@ resource "google_org_policy_policy" "restrict_cmek_projects" {
       values {
         denied_values = [
           "bigquery.googleapis.com",
-          "discoveryengine.googleapis.com",
           "logging.googleapis.com",
         ]
       }

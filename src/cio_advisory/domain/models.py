@@ -194,6 +194,9 @@ class HouseView:
     rationale: str = ""
     citation: Citation | None = None  # provenance back to the source CIO article
     tags: tuple[str, ...] = ()  # theme tags matched against a holding's own
+    # The tenant whose CIO publication this is. "" is a public view any principal may be briefed
+    # from; a named tenant is visible to that tenant's principals only (domain/entitlements.py).
+    tenant: str = ""
 
     @property
     def signal(self) -> ThemeSignal:

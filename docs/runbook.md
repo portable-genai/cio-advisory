@@ -46,7 +46,7 @@ review), never a 500. A missing portfolio or empty house-view result returns a 2
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
 | `RetrievalEmptyError` under `platform` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed there. |
-| `RetrievalEmptyError` under `gcp` | The Agent Search store holds no records | Run `make ingest-house-views PROJECT=<id>`. Terraform creates the store empty. |
+| `RetrievalEmptyError` under `gcp` | The Agent Search store holds no house views for the caller's tenant | Run `make ingest-house-views PROJECT=<id> TENANT=<tenant>` (see below). Terraform creates the store empty, and a document under another tenant is invisible by design. |
 | `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the book is loaded (`make load-demo-book`). A client loaded under a different tenant reads as absent by design: the entitlement gate fails closed. |
 | Briefing has fewer points than house views | UNSUITABLE points were dropped | Expected: unsuitable themes are never presented. Review the audit metadata `n_review_or_unsuitable`. |
 | Eval gate fails on `no_advice_safety` | Output read as advice or missing disclaimer | A prompt or post-processing change leaked directive phrasing. Revert and re-run `python eval/run_eval.py`. |
@@ -87,22 +87,47 @@ replace, so apply the schema before there is anything in it worth keeping.
 ### The house-view store
 
 The standalone `gcp` profile retrieves house views from an Agent Search data store, created
-by `infra/terraform/house_views.tf` and filled by `scripts/ingest_house_views.py`:
+by `infra/terraform/house_views.tf` and filled by `scripts/ingest_house_views.py`. Until it
+holds records the pipeline refuses every briefing with `RetrievalEmptyError`, which is correct
+(nothing ungrounded is ever answered) and a confusing way to learn that a store was never
+provisioned. The `platform` profile does not use it: retrieval there is delegated to
+`enterprise-knowledge-base`.
+
+**Where the store is, is one setting.** Agent Search serves only `global`, `us` and `eu`, never
+the deploy region. Terraform creates the store at `house_views_location` (default `us`) and
+the API reads the same value from `CIO_HOUSE_VIEWS_LOCATION` (default `us`); the stack's
+`house_views_api_env` output is that variable, ready to copy into the API's environment. The
+loader takes no location flag: it writes wherever the API reads, through the API's own adapter,
+so the two cannot be pointed at different places. Run the API (and the loader) with
+`CIO_HOUSE_VIEWS_LOCATION` unset or equal to the Terraform value; an emptied variable refuses
+to start, and a Cloud region is refused before any call.
 
 ```bash
-make ingest-house-views PROJECT=<id>
+make ingest-house-views-dry-run TENANT=<tenant>                 # prints the store path, the host and every record; writes nothing
+make ingest-house-views PROJECT=<id> TENANT=<tenant>
 ```
 
-Until it holds records the pipeline refuses every briefing with `RetrievalEmptyError`, which
-is correct (nothing ungrounded is ever answered) and a confusing way to learn that a store
-was never provisioned. The `platform` profile does not use it: retrieval there is delegated
-to `enterprise-knowledge-base`.
+**The tenant is the one the identity adapter resolves**, exactly as for the client book above:
+every document carries it, and a briefing cites a tagged house view only for a caller verified
+into the same tenant. A load under any other value reports success and every briefing reports
+an empty store. The loader therefore requires `--tenant` and refuses an empty one.
 
-Verify with a briefing that exercises the join and the tenant:
+**Re-running is safe.** Each document is compared with what the store holds: missing ones are
+created, changed ones updated, identical ones left alone, and the run reports each group. A
+document under a loaded id that another tenant owns stops the load before anything is written.
+Documents this tenant holds that the shipped corpus no longer names are listed, never deleted.
+
+**The loader needs the `[gcp]` extra and credentials, and the repository's own `.venv` has
+neither** (the offline gate depends on it staying SDK-free). Build one outside the tree:
 
 ```bash
-CIO_PROFILE=gcp cio-advisory briefing client-000418
+python3.12 -m venv ~/venvs/cio-gcp && ~/venvs/cio-gcp/bin/pip install -e ".[gcp]"
+PYTHONPATH=src ~/venvs/cio-gcp/bin/python scripts/ingest_house_views.py --project <id> --tenant <tenant>
 ```
+
+The dry run needs neither the extra nor credentials. Verify with a briefing through the deployed
+console as a user of that tenant, or offline with `CIO_PROFILE=gcp cio-advisory briefing
+client-000418` from the same venv; both must cite the loaded `cio-2026q3-...` documents.
 
 ## Audit and observability
 

@@ -41,9 +41,15 @@ models:
   use_hard_reasoning: false
 
 house_views:
-  data_store_id: cio-house-views       # GCP File Search store (standalone gcp profile)
-  engine_id: cio-advisory-engine
-  location: asia-southeast1
+  # The Agent Search store the standalone gcp profile searches. `location` is deliberately NOT
+  # `region`: Agent Search serves only global, us and eu, and no Cloud region. `us` names one
+  # jurisdiction; `global` names none, and a project enforcing gcp.resourceLocations refuses it
+  # when a document is written or searched. It must equal the Terraform variable
+  # house_views_location (output house_views_api_env), and scripts/ingest_house_views.py writes
+  # to the same value, so the loader, the store and the API cannot name three places.
+  data_store_id: cio-house-views       # infra/terraform/house_views.tf data_store_id
+  engine_id: cio-advisory-engine       # infra/terraform/house_views.tf engine_id; retrieval searches this engine
+  location: ${CIO_HOUSE_VIEWS_LOCATION:-us}
   serving_config: default_search
 
 bigquery:

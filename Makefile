@@ -16,14 +16,14 @@ API_PORT    ?= 8091
 UI_DIR      := ui
 TF_DIR      := infra/terraform
 PROJECT     ?= $(GOOGLE_CLOUD_PROJECT)
-TENANT      ?= demo-bank   # the deployment's is its IAP hosted domain, never this
+TENANT      ?= demo-bank   # the deployment's is the tenant its identity adapter resolves, never this
 
 export CIO_PROFILE := $(PROFILE)
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-demo install-gcp lock fmt lint test briefing demo demo-server demo-selftest eval check \
         demo-browser portability ui-install ui-check run-api run-ui tf-plan tf-check clean \
-        demo-book-dry-run load-demo-book render-golden ingest-house-views
+        demo-book-dry-run load-demo-book render-golden ingest-house-views ingest-house-views-dry-run
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -136,8 +136,11 @@ demo-book-dry-run: ## Write the NDJSON the loader WOULD send to BigQuery, and st
 load-demo-book: ## Load the fictional client book into a deployment's dataset (needs TENANT).
 	$(PYTHON) scripts/load_demo_book.py --project $(PROJECT) --tenant $(TENANT)
 
-ingest-house-views: ## Ingest the shipped CIO corpus into the managed search store.
-	$(PYTHON) scripts/ingest_house_views.py --project $(PROJECT)
+ingest-house-views-dry-run: ## Print the house-view documents the loader WOULD write, and stop.
+	$(PYTHON) scripts/ingest_house_views.py --project $(PROJECT) --tenant $(TENANT) --dry-run
+
+ingest-house-views: ## Load the shipped CIO corpus into the managed store through the gcp adapter (needs TENANT).
+	$(PYTHON) scripts/ingest_house_views.py --project $(PROJECT) --tenant $(TENANT)
 
 tf-plan: ## Terraform plan for the asia-southeast1 infrastructure.
 	cd $(TF_DIR) && terraform init -input=false && terraform plan

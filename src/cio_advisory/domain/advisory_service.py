@@ -30,7 +30,7 @@ from typing import Any
 
 from . import _grounded as g
 from . import gap_analysis as ga
-from .entitlements import assert_may_access_client
+from .entitlements import assert_may_access_client, visible_house_views
 from .errors import GuardrailBlockedError, PortfolioUnavailableError, RetrievalEmptyError
 from .identity import Principal
 from .models import (
@@ -158,9 +158,13 @@ class AdvisoryService:
         )
 
         # 4) Retrieve CIO house views from the governed KB (A2). Empty -> hard error.
+        #    A view another tenant owns is dropped here, in the domain, so no adapter or store
+        #    can place it in this principal's briefing; nothing left is the same hard error as
+        #    nothing retrieved, and says nothing about what the other tenant publishes.
         query = self._build_query(profile, portfolio)
-        house_views: list[HouseView] = g.retrieve_house_views(
-            self._house_view, query, top_k=_DEFAULT_TOP_K
+        house_views: list[HouseView] = visible_house_views(
+            principal,
+            g.retrieve_house_views(self._house_view, query, top_k=_DEFAULT_TOP_K),
         )
         if not house_views:
             self._write_audit(actor, redacted_id, "", Decision.ESCALATED)
