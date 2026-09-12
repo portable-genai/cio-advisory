@@ -153,10 +153,19 @@ def load(project: str, dataset: str, rows: dict[str, list[dict[str, Any]]], loca
         )
     for table in _TABLES:
         table_rows = rows[table]
+        table_ref = bigquery.TableReference.from_string(f"{dataset_ref}.{table}")
+        # Load into the schema the TABLE already has, which is the schema Terraform declared.
+        # WRITE_TRUNCATE with no schema autodetects one from the rows and REPLACES the table's,
+        # which is how these five tables came to be all-NULLABLE in a different column order from
+        # infra/terraform/bigquery.tf. Nothing failed at the time: the rows loaded and the demo
+        # read them. The cost arrived at the next `terraform plan`, which reported all five tables
+        # as `must be replaced` -- a replacement that destroys every row it holds. Passing the
+        # schema makes a row that does not fit the declared columns fail the load instead.
         job = client.load_table_from_json(
             table_rows,
-            f"{dataset_ref}.{table}",
+            table_ref,
             job_config=bigquery.LoadJobConfig(
+                schema=client.get_table(table_ref).schema,
                 write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
                 schema_update_options=None,
             ),
