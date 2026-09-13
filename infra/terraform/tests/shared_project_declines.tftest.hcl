@@ -98,8 +98,9 @@ run "a_fork_on_its_own_project_keeps_every_control" {
   command = plan
 
   variables {
-    worm_locked      = true
-    access_policy_id = "987654321098"
+    worm_locked         = true
+    access_policy_id    = "987654321098"
+    manage_audit_config = true
   }
 
   assert {
@@ -114,7 +115,7 @@ run "a_fork_on_its_own_project_keeps_every_control" {
 
   assert {
     condition     = length(google_project_iam_audit_config.data_access) == 1 && length(google_access_context_manager_service_perimeter.cio) == 1
-    error_message = "With no override, the audit config and the perimeter must both be created."
+    error_message = "A deployment that names manage_audit_config = true must get the audit config; the perimeter arrives with no override."
   }
 
   assert {
