@@ -48,7 +48,8 @@ resource "google_project_iam_member" "app" {
 
 # App uses the CMEK for envelope ops it performs directly.
 resource "google_kms_crypto_key_iam_member" "app" {
-  crypto_key_id = google_kms_crypto_key.cio.id
+  count         = var.cmek_enabled ? 1 : 0
+  crypto_key_id = one(google_kms_crypto_key.cio[*].id)
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:${google_service_account.app.email}"
 }

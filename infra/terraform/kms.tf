@@ -11,6 +11,7 @@
 #         global/multi-region key. Regional CMEK pins crypto material in-country.
 
 resource "google_kms_key_ring" "cio" {
+  count    = var.cmek_enabled ? 1 : 0
   name     = "cio-advisory-ring"
   location = var.region # asia-southeast1 : regional, in-country key material (P-03)
 
@@ -18,8 +19,9 @@ resource "google_kms_key_ring" "cio" {
 }
 
 resource "google_kms_crypto_key" "cio" {
+  count    = var.cmek_enabled ? 1 : 0
   name     = "cio-advisory-cmek"
-  key_ring = google_kms_key_ring.cio.id
+  key_ring = one(google_kms_key_ring.cio[*].id)
 
   purpose         = "ENCRYPT_DECRYPT"
   rotation_period = "7776000s" # 90 days : periodic rotation for key hygiene
@@ -45,21 +47,24 @@ data "google_project" "this" {
 
 # BigQuery service agent (portfolio + profile dataset CMEK).
 resource "google_kms_crypto_key_iam_member" "bigquery" {
-  crypto_key_id = google_kms_crypto_key.cio.id
+  count         = var.cmek_enabled ? 1 : 0
+  crypto_key_id = one(google_kms_crypto_key.cio[*].id)
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:bq-${data.google_project.this.number}@bigquery-encryption.iam.gserviceaccount.com"
 }
 
 # Vertex AI / Agent Runtime service agent.
 resource "google_kms_crypto_key_iam_member" "aiplatform" {
-  crypto_key_id = google_kms_crypto_key.cio.id
+  count         = var.cmek_enabled ? 1 : 0
+  crypto_key_id = one(google_kms_crypto_key.cio[*].id)
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
 }
 
 # Cloud Logging service agent (CMEK on the WORM bucket).
 resource "google_kms_crypto_key_iam_member" "logging" {
-  crypto_key_id = google_kms_crypto_key.cio.id
+  count         = var.cmek_enabled ? 1 : 0
+  crypto_key_id = one(google_kms_crypto_key.cio[*].id)
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-logging.iam.gserviceaccount.com"
 }

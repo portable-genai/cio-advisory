@@ -28,7 +28,8 @@ resource "google_project_service_identity" "artifactregistry" {
 }
 
 resource "google_kms_crypto_key_iam_member" "artifactregistry" {
-  crypto_key_id = google_kms_crypto_key.cio.id
+  count         = var.cmek_enabled ? 1 : 0
+  crypto_key_id = one(google_kms_crypto_key.cio[*].id)
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:${google_project_service_identity.artifactregistry.email}"
 }
@@ -40,7 +41,7 @@ resource "google_artifact_registry_repository" "images" {
   description   = "Promoted cio-advisory API and console images, CMEK-encrypted."
   format        = "DOCKER"
 
-  kms_key_name = google_kms_crypto_key.cio.id
+  kms_key_name = one(google_kms_crypto_key.cio[*].id)
 
   # Immutable tags: a promoted release tag must always name the same bytes. Without this a
   # digest-pinned deployment can still be undermined by the tag that produced it being moved
