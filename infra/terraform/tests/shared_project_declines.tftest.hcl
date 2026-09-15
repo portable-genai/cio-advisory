@@ -21,6 +21,7 @@ run "a_sibling_stack_in_a_shared_project_declines_what_it_does_not_own" {
   command = plan
 
   variables {
+    cmek_enabled                        = true
     worm_locked                         = false
     retention_days                      = 30
     manage_org_policies                 = false
@@ -98,6 +99,7 @@ run "a_fork_on_its_own_project_keeps_every_control" {
   command = plan
 
   variables {
+    cmek_enabled        = true
     worm_locked         = true
     access_policy_id    = "987654321098"
     manage_audit_config = true

@@ -243,3 +243,19 @@ variable "house_views_location" {
     error_message = "house_views_location must be one of global, us, eu: the only locations Agent Search serves. A Cloud region such as asia-southeast1 is not one."
   }
 }
+
+variable "cmek_enabled" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Whether this stack creates its own Cloud KMS key ring and key and binds every store, log
+    bucket and revision to it. False by default, and the default is the point: a key ring can
+    never be deleted, a log bucket that has CMEK can never drop it, and registries and document
+    stores take their key at creation. None of that changes an answer or a screen, and every
+    resource is encrypted at rest with Google-managed keys regardless. A deployment with a
+    customer whose data it must be able to shred, whose key access must be audited, or whose
+    keys must live in an HSM sets this true in its own tfvars BEFORE its first apply. Flipping
+    it off on a stack that already applied it is refused by the keys' prevent_destroy, which is
+    the right answer: the stores it bound stay bound.
+  EOT
+}

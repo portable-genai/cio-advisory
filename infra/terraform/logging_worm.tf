@@ -30,8 +30,11 @@ resource "google_logging_project_bucket_config" "worm_audit" {
   locked = var.worm_locked
 
   # CMEK on the log bucket (P-09) : explicit, does not cascade.
-  cmek_settings {
-    kms_key_name = google_kms_crypto_key.cio.id
+  dynamic "cmek_settings" {
+    for_each = var.cmek_enabled ? [1] : []
+    content {
+      kms_key_name = one(google_kms_crypto_key.cio[*].id)
+    }
   }
 
   depends_on = [
