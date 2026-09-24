@@ -105,6 +105,28 @@ def _container() -> Container:
     return build_container()
 
 
+def _service() -> tuple[Any, Any]:
+    """The advisory service for ONE command, and the recorder its review hand-off goes through."""
+    from ..adapters.controls import RecordingReviewRouter
+
+    container = _container()
+    routing = RecordingReviewRouter(container.review_router)
+    return _deps().build_advisory_service(container, review_router=routing), routing
+
+
+def _echo_review_routing(routing: Any) -> None:
+    """Say what happened to the human-review hand-off, in the words the operator needs."""
+    from ..adapters.controls import REVIEW_ROUTING_TEXT, ReviewRouting
+
+    outcome = routing.outcome
+    color = typer.colors.GREEN if outcome is ReviewRouting.ROUTED else typer.colors.YELLOW
+    if outcome in (ReviewRouting.FAILED, ReviewRouting.OFF):
+        color = typer.colors.RED
+    typer.secho(
+        f"  human review hand-off: {outcome.value}. {REVIEW_ROUTING_TEXT[outcome]}", fg=color
+    )
+
+
 def _deps() -> Any:
     try:
         from ..api import deps  # type: ignore[attr-defined]
@@ -227,12 +249,14 @@ def briefing(
 ) -> None:
     """Build a suitability-checked advisory briefing for a client (not advice)."""
 
+    svc, routing = _run("briefing", _service)
+
     def _do() -> AdvisoryBriefing:
-        svc = _deps().build_advisory_service(_container())
         return svc.brief(client_id, _cli_principal())
 
     result = _run("briefing", _do)
     _print_briefing(result)
+    _echo_review_routing(routing)
 
 
 @app.command(name="talking-points")
@@ -241,8 +265,9 @@ def talking_points(
 ) -> None:
     """Generate the suitability-checked talking points for a client (not advice)."""
 
+    svc, routing = _run("talking-points", _service)
+
     def _do() -> list[TalkingPoint]:
-        svc = _deps().build_advisory_service(_container())
         return svc.talking_points(client_id, _cli_principal())
 
     points = _run("talking-points", _do)
@@ -255,6 +280,7 @@ def talking_points(
         typer.secho("  (no suitable talking points produced)", fg=typer.colors.YELLOW)
     for i, tp in enumerate(points, start=1):
         _print_talking_point(tp, i)
+    _echo_review_routing(routing)
 
 
 @app.command()
@@ -264,8 +290,9 @@ def suitability(
 ) -> None:
     """Assess the suitability of a CIO house-view theme for a client."""
 
+    svc, routing = _run("suitability", _service)
+
     def _do() -> AdvisoryBriefing:
-        svc = _deps().build_advisory_service(_container())
         return svc.brief(client_id, _cli_principal())
 
     result = _run("suitability", _do)
@@ -276,11 +303,13 @@ def suitability(
             typer.secho(f"Suitability : {a.theme}", bold=True, fg=typer.colors.GREEN)
             _echo_suitability(a, indent="  ")
             _echo_citations(a.citations, indent="  ")
+            _echo_review_routing(routing)
             return
     typer.secho(
         f"No suitable, in-scope talking point matched theme '{theme}' for client {client_id}.",
         fg=typer.colors.YELLOW,
     )
+    _echo_review_routing(routing)
 
 
 @app.command()

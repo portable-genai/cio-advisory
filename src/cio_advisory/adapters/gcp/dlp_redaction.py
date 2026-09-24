@@ -52,6 +52,19 @@ _DEFAULT_INFO_TYPES: tuple[str, ...] = (
     "IBAN_CODE",
 )
 
+# Tuned against false positives (runtime-control contract, 2026-09-24). House-view prose names
+# central banks, indices, benchmarks and instruments, and at POSSIBLE likelihood DLP could take
+# "Dow Jones" or "Hang Seng" for a person and mask it. Only LIKELY findings are masked (a match
+# is already replaced with its info-type name, so the model still reads the shape of the
+# text), and a PERSON_NAME finding containing this domain's own vocabulary is excluded.
+_MIN_LIKELIHOOD = "LIKELY"
+_DOMAIN_VOCABULARY_REGEX = (
+    r"(?i)\b(CIO|House View|Fed|FOMC|ECB|BoJ|BoE|PBoC|MAS|RBA|HKMA|S&P|MSCI|FTSE|Nasdaq|"
+    r"Dow Jones|Nikkei|Hang Seng|Straits Times|STI|Stoxx|Bloomberg|Barclays|"
+    r"Treasur(?:y|ies)|UST|Bunds?|JGBs?|Gilts?|REITs?|ETFs?|Equit(?:y|ies)|Bonds?|Credit|"
+    r"Emerging Markets?|Gold|Alternatives|Real Assets)\b"
+)
+
 
 class DlpRedactionAdapter:
     """De-identify PII via DLP ``deidentify_content`` (templates or inline config)."""
@@ -95,37 +108,61 @@ class DlpRedactionAdapter:
                 deidentify_template_name=self._dlp.deidentify_template,
             )
 
-        info_types = [{"name": name} for name in _DEFAULT_INFO_TYPES]
-        custom_info_types = self._custom_info_types(dlp_v2)
-        inspect_config = {
-            "info_types": info_types,
-            "custom_info_types": custom_info_types,
+        return dlp_v2.DeidentifyContentRequest(
+            parent=self._parent,
+            item=item,
+            inspect_config=self._inline_inspect_config(),
+            deidentify_config=self._inline_deidentify_config(),
+        )
+
+    def _inline_inspect_config(self) -> dict[str, Any]:
+        """The inspect config used when no templates are configured, tuned (see above).
+
+        Plain data with likelihoods by enum NAME, which the SDK's proto marshalling accepts,
+        so the tuning is testable with no GCP SDK installed.
+        """
+        return {
+            "info_types": [{"name": name} for name in _DEFAULT_INFO_TYPES],
+            "custom_info_types": self._custom_info_types(),
+            "rule_set": [
+                {
+                    "info_types": [{"name": "PERSON_NAME"}],
+                    "rules": [
+                        {
+                            "exclusion_rule": {
+                                "regex": {"pattern": _DOMAIN_VOCABULARY_REGEX},
+                                "matching_type": "MATCHING_TYPE_PARTIAL_MATCH",
+                            }
+                        }
+                    ],
+                }
+            ],
             "include_quote": False,
-            "min_likelihood": dlp_v2.Likelihood.POSSIBLE,
+            "min_likelihood": _MIN_LIKELIHOOD,
         }
-        deidentify_config: dict[str, Any] = {
+
+    @staticmethod
+    def _inline_deidentify_config() -> dict[str, Any]:
+        # Replace every finding with its info-type name, e.g. "[PERSON_NAME]": irreversible,
+        # and the model still reads the shape of the text.
+        return {
             "info_type_transformations": {
                 "transformations": [
                     {"primitive_transformation": {"replace_with_info_type_config": {}}}
                 ]
             }
         }
-        return dlp_v2.DeidentifyContentRequest(
-            parent=self._parent,
-            item=item,
-            inspect_config=inspect_config,
-            deidentify_config=deidentify_config,
-        )
 
-    def _custom_info_types(self, dlp_v2: Any) -> list[dict[str, Any]]:
+    def _custom_info_types(self) -> list[dict[str, Any]]:
         """The configured jurisdictions' national ids, as DLP custom info types.
 
         Derived from the same shared ``pii-kit`` rows the local redactor and the eval gate
         use, in their RE2-safe form (a DLP regex is RE2, with no lookaround, and cannot carry a
         checksum; see the module docstring on why matching on shape alone is the safe direction
         here). Rows that share an info type under two shapes (HK's parenthesised and bare HKID)
-        are OR-ed into one RE2 alternation, so each info-type name appears once. ``dlp_v2`` is
-        passed in because the SDK import must stay lazy for the local/onprem profiles.
+        are OR-ed into one RE2 alternation, so each info-type name appears once. Each is LIKELY,
+        which clears the ``LIKELY`` floor above: a national-id shape is a finding in its own
+        right.
         """
         # verify: https://cloud.google.com/dlp/docs/creating-custom-infotypes-likelihood
         by_name: dict[str, list[str]] = {}
@@ -135,7 +172,7 @@ class DlpRedactionAdapter:
             {
                 "info_type": {"name": name},
                 "regex": {"pattern": "|".join(f"(?:{p})" for p in patterns)},
-                "likelihood": dlp_v2.Likelihood.LIKELY,
+                "likelihood": "LIKELY",
             }
             for name, patterns in by_name.items()
         ]

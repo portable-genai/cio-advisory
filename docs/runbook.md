@@ -40,11 +40,47 @@ A guardrail block returns HTTP 200 with an explicit `blocked` envelope (flagged 
 review), never a 500. A missing portfolio or empty house-view result returns a 200
 `unavailable` envelope.
 
+Every briefing, talking-points and suitability response carries `review_routing`: what
+happened to the briefing's hand-off to `human-review-console`. `routed` means the console
+accepted it; `failed` means the hand-off failed and the briefing is NOT in the console (the
+failure is logged at WARNING with the exception type, and the response still returns);
+`off` means routing is switched off in this deployment; `not_required` means nothing needed
+routing. The console shows the outcome in plain words next to the human-review flag, and the
+agent tools, the MCP tools and the CLI report the same value.
+
+## Runtime controls
+
+`CIO_GUARDRAIL`, `CIO_PII_REDACTION` and `CIO_REVIEW_ROUTING` each switch one cheap control:
+the guardrail port (Model Armor under `gcp`, `agent-guardrail-gateway` under `platform`, the
+heuristic locally), the redaction port (DLP under `gcp`, the gateway under `platform`, regex
+locally) and the review hand-off to `human-review-console`. Each is read once at startup in
+three states: unset is on, `true`/`false` (or `on`/`off`, `1`/`0`, `yes`/`no`) wins, and an
+emptied or unrecognised value refuses to boot, naming the variable. Off binds an adapter that
+does nothing, and a process with any control off logs one warning at startup naming each.
+
+Under `gcp` or `platform`, a control that is on must be able to work, so the process refuses to
+boot when:
+
+- review routing is on and `HUMAN_REVIEW_URL` is not set. Name the console, or set
+  `CIO_REVIEW_ROUTING=off` to run without routing. Unsetting `HUMAN_REVIEW_URL` does not pause
+  routing; the switch does. The corpus loaders (`make load-demo-book`,
+  `make ingest-house-views`) escalate nothing and state routing off for their own run.
+- the guardrail is on, bound to Model Armor, and the template id is empty. Name one, or set
+  `CIO_GUARDRAIL=off`.
+
+The DLP inspect config (inline, and the Terraform inspect template) masks only `LIKELY`
+findings, replaces a match with its info-type name (`[PERSON_NAME]`), and excludes house-view
+vocabulary (central banks, indices, benchmarks, instruments) from `PERSON_NAME`. The local
+redactor leaves an eight-digit amount after a currency code (`SGD 90000000`) intact rather than
+masking it as a phone number.
+
 ## Common issues
 
 | Symptom | Likely cause | Action |
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
+| Boot fails: "Review routing is on under profile 'gcp' but HUMAN_REVIEW_URL is not set" | No review console is named for a managed process | Set `HUMAN_REVIEW_URL` to the `human-review-console` base URL, or `CIO_REVIEW_ROUTING=off` to run without routing. |
+| A response carries `review_routing: "failed"` | The console was unreachable or refused the hand-off; the briefing is NOT queued for review | Read the WARNING "human-review hand-off failed: <exception type>", fix the console or credentials, and re-run the briefing. |
 | `RetrievalEmptyError` under `platform` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed there. |
 | `RetrievalEmptyError` under `gcp` | The Agent Search store holds no house views for the caller's tenant | Run `make ingest-house-views PROJECT=<id> TENANT=<tenant>` (see below). Terraform creates the store empty, and a document under another tenant is invisible by design. |
 | `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the book is loaded (`make load-demo-book`). A client loaded under a different tenant reads as absent by design: the entitlement gate fails closed. |

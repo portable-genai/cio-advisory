@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -67,6 +68,22 @@ def corpus() -> tuple[HouseView, ...]:
     if not views:
         raise SystemExit("the shipped corpus has no house views; nothing to load")
     return views
+
+
+def _load_settings() -> Settings:
+    """The settings, loaded with review routing stated off unless the operator said otherwise.
+
+    A loader escalates nothing, so it states routing off rather than needing a review console
+    named to load data (the runtime-control contract's boot check). The statement is scoped to
+    this load, so a caller that imports ``main`` keeps its own environment.
+    """
+    if "CIO_REVIEW_ROUTING" in os.environ:
+        return Settings.load()
+    os.environ["CIO_REVIEW_ROUTING"] = "false"
+    try:
+        return Settings.load()
+    finally:
+        del os.environ["CIO_REVIEW_ROUTING"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     if not tenant:
         raise SystemExit("--tenant names nothing; pass the tenant the deployment resolves")
 
-    settings = Settings.load()
+    settings = _load_settings()
     project = args.project.strip() or settings.project_id
     views = corpus()
     records = [house_view_record(view, tenant) for view in views]

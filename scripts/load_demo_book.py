@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -174,6 +175,22 @@ def load(project: str, dataset: str, rows: dict[str, list[dict[str, Any]]], loca
         print(f"  {table}: {len(table_rows)} rows")
 
 
+def _load_settings() -> Settings:
+    """The settings, loaded with review routing stated off unless the operator said otherwise.
+
+    A loader escalates nothing, so it states routing off rather than needing a review console
+    named to load data (the runtime-control contract's boot check). The statement is scoped to
+    this load, so a caller that imports ``main`` keeps its own environment.
+    """
+    if "CIO_REVIEW_ROUTING" in os.environ:
+        return Settings.load()
+    os.environ["CIO_REVIEW_ROUTING"] = "false"
+    try:
+        return Settings.load()
+    finally:
+        del os.environ["CIO_REVIEW_ROUTING"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--project", default="", help="the GCP project holding the dataset")
@@ -197,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    settings = Settings.load()
+    settings = _load_settings()
     dataset = args.dataset or settings.bigquery.dataset
     location = args.location or settings.bigquery.location
     rows = rows_to_load(args.tenant)

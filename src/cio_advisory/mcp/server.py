@@ -23,15 +23,27 @@ from typing import Any
 
 from hex_service_kit import mcpserve
 
+from ..adapters.controls import RecordingReviewRouter
 from ..api import deps
 
 # The service is typed against the DOMAIN's principal, not the kit's. Both carry the
 # same fields, so constructing the kit's here type-checked as nothing and shipped a
 # value the service's own annotation rejects.
 from ..domain.identity import Principal
+from ..domain.serialization import to_jsonable
 
 #: The tools this module answers, as data, so a test can hold it against the catalog.
 HANDLER_NAMES: tuple[str, ...] = ("build_briefing", "generate_talking_points", "check_suitability")
+
+
+def _service() -> tuple[Any, RecordingReviewRouter]:
+    """The advisory service for ONE tool call, and the recorder its review hand-off goes through.
+
+    Every payload these tools return carries ``review_routing``, so a briefing that requires
+    review but never reached the console says so to the calling agent.
+    """
+    routing = RecordingReviewRouter(deps.get_container().review_router)
+    return deps.build_advisory_service(deps.get_container(), review_router=routing), routing
 
 
 def build_handlers(actor: str) -> dict[str, mcpserve.Handler]:
@@ -39,14 +51,19 @@ def build_handlers(actor: str) -> dict[str, mcpserve.Handler]:
     principal = Principal(subject=actor, principals=(), tenant="", source="mcp")
 
     def build_briefing(**arguments: Any) -> Any:
-        return deps.get_advisory_service().brief(
-            str(arguments.get("client_id", "") or ""), principal
-        )
+        service, routing = _service()
+        briefing = service.brief(str(arguments.get("client_id", "") or ""), principal)
+        return {**to_jsonable(briefing), "review_routing": routing.outcome.value}
 
     def generate_talking_points(**arguments: Any) -> Any:
-        return deps.get_advisory_service().talking_points(
-            str(arguments.get("client_id", "") or ""), principal
-        )
+        client_id = str(arguments.get("client_id", "") or "")
+        service, routing = _service()
+        points = service.talking_points(client_id, principal)
+        return {
+            "client_id": client_id,
+            "talking_points": to_jsonable(points),
+            "review_routing": routing.outcome.value,
+        }
 
     def check_suitability(**arguments: Any) -> Any:
         """Suitability is the briefing's alignment section, not a separate judgement.
@@ -60,17 +77,27 @@ def build_handlers(actor: str) -> dict[str, mcpserve.Handler]:
         than as a filtered list. An unknown theme says so explicitly instead of returning an
         empty result that reads like "no concerns".
         """
-        briefing = deps.get_advisory_service().brief(
-            str(arguments.get("client_id", "") or ""), principal
-        )
+        service, routing = _service()
+        briefing = service.brief(str(arguments.get("client_id", "") or ""), principal)
         alignment = briefing.alignment
+        outcome = routing.outcome.value
         theme = str(arguments.get("theme", "") or "")
         if not theme:
-            return alignment
+            return {"alignment": alignment, "review_routing": outcome}
         for bucket in ("themes_in_line", "gaps", "overweights"):
             if theme in {str(x) for x in getattr(alignment, bucket, ())}:
-                return {"theme": theme, "standing": bucket, "alignment": alignment}
-        return {"theme": theme, "standing": "not_in_mandate", "alignment": alignment}
+                return {
+                    "theme": theme,
+                    "standing": bucket,
+                    "alignment": alignment,
+                    "review_routing": outcome,
+                }
+        return {
+            "theme": theme,
+            "standing": "not_in_mandate",
+            "alignment": alignment,
+            "review_routing": outcome,
+        }
 
     return {
         "build_briefing": build_briefing,

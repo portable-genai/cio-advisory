@@ -35,6 +35,9 @@ export type ThemeSignal = "opportunity" | "threat" | "watch";
 /** Where one asset class sits against the model portfolio's published band. */
 export type GapStatus = "under" | "in_range" | "over";
 
+/** What happened to the human-review hand-off for one response. */
+export type ReviewRouting = "routed" | "failed" | "off" | "not_required";
+
 export const SIGNAL_LABEL: Record<ThemeSignal, string> = {
   opportunity: "Opportunity",
   threat: "Threat",
@@ -214,6 +217,7 @@ export interface AdvisoryBriefing {
   not_advice_disclaimer: string;
   requires_human_review: boolean;
   generated_at: string;
+  review_routing?: ReviewRouting;
 }
 
 /** One client in the picker. The label is derived server-side from the profile. */
@@ -235,6 +239,7 @@ export interface TalkingPointsResponse {
   talking_points: TalkingPoint[];
   not_advice_disclaimer: string;
   requires_human_review: boolean;
+  review_routing?: ReviewRouting;
 }
 
 // --------------------------------------------------------------------------- //

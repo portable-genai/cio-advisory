@@ -7,6 +7,8 @@
 
 import type { ReactNode } from "react";
 
+import type { ReviewRouting } from "@/lib/types";
+
 export function Panel({
   title,
   children,
@@ -72,4 +74,29 @@ export function ErrorNote({ message }: { message: string }) {
 
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="text-sm text-ink-400">{children}</p>;
+}
+
+const REVIEW_ROUTING_TEXT: Record<Exclude<ReviewRouting, "not_required">, string> = {
+  routed: "Sent to the review console.",
+  failed: "Could not reach the review console; this briefing is not queued for review.",
+  off: "Review routing is off in this deployment; this briefing is not queued for review.",
+};
+
+/**
+ * What happened to the hand-off to the review console, in plain words, beside the human-review
+ * flag. A briefing that requires review but is not queued must say so rather than read as
+ * reviewed. Nothing is shown when the API did not report it or nothing needed routing.
+ */
+export function ReviewRoutingNote({ routing }: { routing?: ReviewRouting }) {
+  if (!routing || routing === "not_required") return null;
+  return (
+    <p
+      data-review-routing={routing}
+      className={`text-xs font-medium ${
+        routing === "routed" ? "text-emerald-800" : "text-rose-800"
+      }`}
+    >
+      {REVIEW_ROUTING_TEXT[routing]}
+    </p>
+  );
 }

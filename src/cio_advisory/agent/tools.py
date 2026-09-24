@@ -51,11 +51,18 @@ def _principal(actor: str) -> Any:
     )
 
 
-def _service(settings: Settings | None) -> Any:
+def _service(settings: Settings | None) -> tuple[Any, Any]:
+    """The advisory service for ONE tool call, and the recorder its review hand-off goes through.
+
+    The tool reports what happened to the hand-off (``review_routing``) from the recorder, so
+    a briefing that requires review but never reached the console says so to the agent.
+    """
+    from ..adapters.controls import RecordingReviewRouter
     from ..api.deps import build_advisory_service
 
     c = _container(settings)
-    return build_advisory_service(c)
+    routing = RecordingReviewRouter(c.review_router)
+    return build_advisory_service(c, review_router=routing), routing
 
 
 def build_briefing(
@@ -75,21 +82,26 @@ def build_briefing(
       actor: Authenticated RM / service identity the request is made for.
 
     Returns:
-      A JSON-safe ``AdvisoryBriefing`` dict.
+      A JSON-safe ``AdvisoryBriefing`` dict, plus ``review_routing``: whether the briefing
+      was sent to the review console (``routed``), could not be (``failed``), or routing is
+      switched off (``off``).
     """
     from ..domain.serialization import to_jsonable
 
-    return to_jsonable(_service(settings).brief(client_id, _principal(actor)))
+    service, routing = _service(settings)
+    payload: dict[str, Any] = to_jsonable(service.brief(client_id, _principal(actor)))
+    payload["review_routing"] = routing.outcome.value
+    return payload
 
 
 def generate_talking_points(
     client_id: str,
     actor: str = _DEFAULT_ACTOR,
     settings: Settings | None = None,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Generate personalised, suitability-aware talking points for one client.
 
-    Returns a list of ``TalkingPoint`` objects, each linking a CIO house-view theme to the
+    Returns the ``TalkingPoint`` objects, each linking a CIO house-view theme to the
     client's holdings, with a suitability verdict and citations. Decision-support, NOT
     advice (``is_advice`` is always false).
 
@@ -98,11 +110,18 @@ def generate_talking_points(
       actor: Authenticated RM / service identity the request is made for.
 
     Returns:
-      A JSON-safe list of ``TalkingPoint`` dicts.
+      A JSON-safe dict: ``client_id``, ``talking_points`` (a list of ``TalkingPoint``
+      dicts) and ``review_routing``, what happened to the briefing's human-review hand-off.
     """
     from ..domain.serialization import to_jsonable
 
-    return to_jsonable(_service(settings).talking_points(client_id, _principal(actor)))
+    service, routing = _service(settings)
+    points = service.talking_points(client_id, _principal(actor))
+    return {
+        "client_id": client_id,
+        "talking_points": to_jsonable(points),
+        "review_routing": routing.outcome.value,
+    }
 
 
 def check_suitability(
@@ -123,16 +142,20 @@ def check_suitability(
       actor: Authenticated RM / service identity the request is made for.
 
     Returns:
-      A JSON-safe ``SuitabilityAssessment`` dict (or a REVIEW envelope).
+      A JSON-safe ``SuitabilityAssessment`` dict (or a REVIEW envelope), plus
+      ``review_routing`` for the briefing it was read from.
     """
     from ..domain.serialization import to_jsonable
 
-    briefing = _service(settings).brief(client_id, _principal(actor))
+    service, routing = _service(settings)
+    briefing = service.brief(client_id, _principal(actor))
     wanted = theme.strip().lower()
     for point in briefing.talking_points:
         assessment = point.suitability
         if assessment is not None and assessment.theme.strip().lower() == wanted:
-            return to_jsonable(assessment)
+            payload: dict[str, Any] = to_jsonable(assessment)
+            payload["review_routing"] = routing.outcome.value
+            return payload
     return {
         "theme": theme,
         "verdict": "review",
@@ -140,6 +163,7 @@ def check_suitability(
             "No suitable, in-scope talking point matched this theme; the RM should review "
             "the full briefing."
         ),
+        "review_routing": routing.outcome.value,
     }
 
 
