@@ -277,7 +277,7 @@ def test_agent_service_uses_configured_suitability_policy():
             complex_asset_classes=("cash",),
         ),
     )
-    service = _service(settings)
+    service, _routing = _service(settings)
     assert service._suitability.concentration_limit == 0.17
     assert service._suitability.aggressive_asset_classes == frozenset({AssetClass.FIXED_INCOME})
     assert service._suitability.complex_asset_classes == frozenset({AssetClass.CASH})

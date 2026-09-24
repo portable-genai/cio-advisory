@@ -45,6 +45,7 @@ from ..domain.services import AdvisoryService
 from ..envread import boolean_setting, read_env_setting, setting_or_default
 from ..ports.identity import VERIFIED
 from . import deps
+from .disclosure import disclose
 from .schemas import (
     AdvisoryBriefingResponse,
     AgentCardModel,
@@ -535,6 +536,7 @@ def briefing(
     request: ClientRequest,
     principal: CurrentPrincipal,
     service: Annotated[AdvisoryService, Depends(deps.get_advisory_service)],
+    routing: deps.RequestReviewRouter,
 ) -> JSONResponse | AdvisoryBriefingResponse:
     """Build the suitability-checked advisory briefing for one client (not advice)."""
     try:
@@ -545,7 +547,7 @@ def briefing(
         return _blocked_response(request.client_id, str(exc))
     except (RetrievalEmptyError, PortfolioUnavailableError) as exc:
         return _unavailable_response(request.client_id, str(exc))
-    return AdvisoryBriefingResponse.from_domain(result)
+    return disclose(AdvisoryBriefingResponse.from_domain(result), routing=routing)
 
 
 @app.post("/v1/talking-points", response_model=TalkingPointsResponse, tags=["artifacts"])
@@ -553,6 +555,7 @@ def talking_points(
     request: ClientRequest,
     principal: CurrentPrincipal,
     service: Annotated[AdvisoryService, Depends(deps.get_advisory_service)],
+    routing: deps.RequestReviewRouter,
 ) -> JSONResponse | TalkingPointsResponse:
     """Generate the suitability-checked talking points for one client (not advice)."""
     try:
@@ -563,7 +566,7 @@ def talking_points(
         return _blocked_response(request.client_id, str(exc))
     except (RetrievalEmptyError, PortfolioUnavailableError) as exc:
         return _unavailable_response(request.client_id, str(exc))
-    return TalkingPointsResponse.from_domain(request.client_id, points)
+    return disclose(TalkingPointsResponse.from_domain(request.client_id, points), routing=routing)
 
 
 @app.post("/v1/suitability", response_model=SuitabilityAssessmentModel, tags=["artifacts"])
@@ -571,6 +574,7 @@ def suitability(
     request: SuitabilityRequest,
     principal: CurrentPrincipal,
     service: Annotated[AdvisoryService, Depends(deps.get_advisory_service)],
+    routing: deps.RequestReviewRouter,
 ) -> JSONResponse | SuitabilityAssessmentModel:
     """Assess the suitability of one CIO house-view theme for a client."""
     try:
@@ -586,7 +590,9 @@ def suitability(
     for point in briefing_result.talking_points:
         assessment = point.suitability
         if assessment is not None and assessment.theme.strip().lower() == wanted:
-            return SuitabilityAssessmentModel.from_domain(assessment)
+            return disclose(SuitabilityAssessmentModel.from_domain(assessment), routing=routing)
+    # The briefing behind this answer was built, and handed to the review console, either way.
+    outcome = routing.outcome.value if routing is not None else "not_required"
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -597,6 +603,7 @@ def suitability(
                 "No suitable, in-scope talking point matched this theme for the client; the "
                 "RM should review the full briefing."
             ),
+            "review_routing": outcome,
         },
     )
 

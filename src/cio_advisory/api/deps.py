@@ -14,7 +14,11 @@ which ports it needs.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated, Any
 
+from fastapi import Depends
+
+from ..adapters.controls import RecordingReviewRouter
 from ..config import Container, Settings, build_container
 from ..domain.models import AssetClass
 from ..domain.services import AdvisoryService
@@ -38,13 +42,31 @@ def get_settings() -> Settings:
 # --------------------------------------------------------------------------- #
 
 
-def get_advisory_service() -> AdvisoryService:
+def get_request_review_router() -> RecordingReviewRouter:
+    """The review router for ONE request, wrapped so the response reports the hand-off.
+
+    FastAPI resolves a dependency once per request, so the route and the service it builds
+    receive the same wrapper and the route reads what the service's hand-off did.
+    """
+    return RecordingReviewRouter(get_container().review_router)
+
+
+#: Injected by FastAPI; ``None`` when the getter is called directly, which binds the
+#: container's router unwrapped.
+RequestReviewRouter = Annotated[RecordingReviewRouter | None, Depends(get_request_review_router)]
+
+
+def get_advisory_service(review_router: RequestReviewRouter = None) -> AdvisoryService:
     """AdvisoryService(house_view, portfolio, llm, guardrail, redaction, tracer, audit)."""
-    return build_advisory_service(get_container())
+    return build_advisory_service(get_container(), review_router=review_router)
 
 
-def build_advisory_service(container: Container) -> AdvisoryService:
-    """Assemble an :class:`AdvisoryService` from an explicit Container."""
+def build_advisory_service(container: Container, *, review_router: Any = None) -> AdvisoryService:
+    """Assemble an :class:`AdvisoryService` from an explicit Container.
+
+    ``review_router`` replaces the container's router for this one service, which is how a
+    caller hands it a :class:`RecordingReviewRouter` and reports the hand-off afterwards.
+    """
     return AdvisoryService(
         house_view=container.house_view,
         portfolio=container.portfolio,
@@ -53,7 +75,7 @@ def build_advisory_service(container: Container) -> AdvisoryService:
         redaction=container.redaction,
         tracer=container.tracer,
         audit=container.audit,
-        review_router=container.review_router,
+        review_router=review_router or container.review_router,
         suitability_policy=SuitabilityPolicy(
             concentration_limit=container.settings.suitability.concentration_limit,
             aggressive_asset_classes=frozenset(

@@ -12,7 +12,7 @@ import type { AdvisoryBriefing } from "@/lib/types";
 import { AlignmentPanel } from "./AlignmentPanel";
 import { CioViewsPanel } from "./CioViewsPanel";
 import { TalkingPointView } from "./TalkingPointView";
-import { Empty, NotAdviceBanner, Panel, Pill } from "./ui";
+import { Empty, NotAdviceBanner, Panel, Pill, ReviewRoutingNote } from "./ui";
 
 export function BriefingView({ briefing }: { briefing: AdvisoryBriefing }) {
   return (
@@ -33,6 +33,11 @@ export function BriefingView({ briefing }: { briefing: AdvisoryBriefing }) {
           ) : null
         }
       >
+        {briefing.requires_human_review ? (
+          <div className="mb-3">
+            <ReviewRoutingNote routing={briefing.review_routing} />
+          </div>
+        ) : null}
         {briefing.talking_points.length ? (
           <div className="space-y-3">
             {briefing.talking_points.map((p, i) => (

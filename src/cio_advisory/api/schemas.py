@@ -13,12 +13,15 @@ domain models, the ports, and the orchestration services : never on a concrete a
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from ..domain import models as m
 from ..domain.serialization import to_jsonable
+
+#: The four outcomes of a human-review hand-off, as the API reports them.
+ReviewRoutingValue = Literal["routed", "failed", "off", "not_required"]
 
 # --------------------------------------------------------------------------- #
 # Shared projections
@@ -60,6 +63,9 @@ class SuitabilityAssessmentModel(BaseModel):
     factors: list[SuitabilityFactorModel] = Field(default_factory=list)
     rationale: str = ""
     citations: list[CitationModel] = Field(default_factory=list)
+
+    #: What happened to the human-review hand-off: routed, failed, off or not_required.
+    review_routing: ReviewRoutingValue = "not_required"
 
     @classmethod
     def from_domain(cls, a: m.SuitabilityAssessment) -> SuitabilityAssessmentModel:
@@ -365,6 +371,9 @@ class AdvisoryBriefingResponse(BaseModel):
     requires_human_review: bool = True
     generated_at: str = ""
 
+    #: What happened to the human-review hand-off: routed, failed, off or not_required.
+    review_routing: ReviewRoutingValue = "not_required"
+
     @classmethod
     def from_domain(cls, briefing: m.AdvisoryBriefing) -> AdvisoryBriefingResponse:
         return cls(
@@ -397,6 +406,9 @@ class TalkingPointsResponse(BaseModel):
     talking_points: list[TalkingPointModel] = Field(default_factory=list)
     not_advice_disclaimer: str = m.NOT_ADVICE_DISCLAIMER
     requires_human_review: bool = True
+
+    #: What happened to the human-review hand-off: routed, failed, off or not_required.
+    review_routing: ReviewRoutingValue = "not_required"
 
     @classmethod
     def from_domain(cls, client_id: str, points: list[m.TalkingPoint]) -> TalkingPointsResponse:

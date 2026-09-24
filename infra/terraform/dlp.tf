@@ -48,7 +48,25 @@ resource "google_data_loss_prevention_inspect_template" "cio" {
       }
     }
 
-    min_likelihood = "POSSIBLE"
+    # Tuned against false positives (runtime-control contract, 2026-09-24): house-view prose
+    # names central banks, indices and instruments, which POSSIBLE took for people. Only LIKELY
+    # findings are masked, and a PERSON_NAME finding containing this domain's vocabulary is
+    # excluded. Keep the pattern in step with adapters/gcp/dlp_redaction.py.
+    rule_set {
+      info_types {
+        name = "PERSON_NAME"
+      }
+      rules {
+        exclusion_rule {
+          matching_type = "MATCHING_TYPE_PARTIAL_MATCH"
+          regex {
+            pattern = "(?i)\\b(CIO|House View|Fed|FOMC|ECB|BoJ|BoE|PBoC|MAS|RBA|HKMA|S&P|MSCI|FTSE|Nasdaq|Dow Jones|Nikkei|Hang Seng|Straits Times|STI|Stoxx|Bloomberg|Barclays|Treasur(?:y|ies)|UST|Bunds?|JGBs?|Gilts?|REITs?|ETFs?|Equit(?:y|ies)|Bonds?|Credit|Emerging Markets?|Gold|Alternatives|Real Assets)\\b"
+          }
+        }
+      }
+    }
+
+    min_likelihood = "LIKELY"
     include_quote  = false # never echo the matched PII back out (P-04)
   }
 }

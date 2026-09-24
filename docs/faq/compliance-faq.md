@@ -29,6 +29,10 @@ the `local` profile enqueues to a transactional outbox so the routing path runs 
 `gcp`/`platform` submit over S2S to `human-review-console`'s intake (`HUMAN_REVIEW_URL`). See
 `ports/review_router.py` and `adapters/{local,platform,onprem}/review_router.py`. The
 maker-checker escalation is a routed action, not a boolean left on the record.
+Every response says what happened to that hand-off (`review_routing`: `routed`, `failed`,
+`off` or `not_required`), so a briefing that could not reach the console is never read as
+queued. A deployment can switch routing off with `CIO_REVIEW_ROUTING=off`, which the response
+also reports; with routing on, a managed process refuses to start without `HUMAN_REVIEW_URL`.
 
 ### How is client PII handled?
 
