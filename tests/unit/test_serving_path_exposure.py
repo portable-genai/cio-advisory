@@ -120,8 +120,10 @@ def test_a_verifying_binding_stands_the_guard_down(monkeypatch: pytest.MonkeyPat
         CIO_PROFILE="gcp",
         CIO_IAP_AUDIENCE="/projects/000/global/backendServices/000",
         CIO_S2S_TOKEN="s3cret",
-        # A managed process with review routing on names its console, or it refuses to boot.
+        # A managed process with review routing on names its console, and under gcp the IAP
+        # edge audience it is reached through, or it refuses to boot.
         HUMAN_REVIEW_URL="https://review.example.test",
+        HUMAN_REVIEW_IAP_AUDIENCE="1234567890-fictionaledgeclient.apps.googleusercontent.com",
     )
     assert _status(app, "/healthz", LAN_PEER) == 200
 
