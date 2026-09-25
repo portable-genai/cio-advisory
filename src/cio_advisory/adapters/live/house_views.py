@@ -11,6 +11,12 @@ Honesty note: these are research summaries of public commentary, not a governed
 in-house CIO publication. Every citation names its real public source so a reviewer
 can open it; the theme is only as good as that source.
 
+A fresh research pass attaches the ``google_search`` tool, so it notes the model it called and
+that it searched (``hex_service_kit.provenance``), and the console shows the ``Search`` pill. A
+request served from the cache made no call and notes nothing. Temperature stays pinned at
+``0.0``: the call EXTRACTS structured themes (stance, asset class, source) that the briefing
+then computes over.
+
 The research result is cached on disk (default 6 h TTL) so one audience demo does one
 research pass, not one per click. Google GenAI SDK imports are lazy: the module imports
 without ``google-genai`` installed, and only a live retrieval needs it (plus
@@ -24,6 +30,8 @@ import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from hex_service_kit import provenance
 
 from ...config import Settings
 from ...domain.models import AssetClass, Citation, HouseView, SourceType, Stance
@@ -115,8 +123,9 @@ class LiveGroundedHouseViewAdapter:
                 "pip install -e '.[gcp]' and set GOOGLE_CLOUD_PROJECT"
             ) from exc
         client = self._get_client()
+        model = self._settings.models.reasoning
         response = client.models.generate_content(
-            model=self._settings.models.reasoning,
+            model=model,
             contents=types.Content(
                 role="user",
                 parts=[types.Part.from_text(text=_PROMPT.format(top_k=top_k))],
@@ -126,6 +135,8 @@ class LiveGroundedHouseViewAdapter:
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             ),
         )
+        provenance.note_model(model)
+        provenance.note_search()
         text = getattr(response, "text", "") or ""
         data = _parse_json(text)
         themes = data.get("themes")

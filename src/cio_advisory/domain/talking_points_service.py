@@ -96,6 +96,11 @@ class TalkingPointsService:
             user_content=user,
             model=None,  # adapter default => reasoning model gemini-3.5-flash
             response_schema=_TALKING_POINTS_SCHEMA,
+            # Free, not pinned: this call DRAFTS the talking-point prose. What is consequential
+            # about a point (its suitability verdict, its alignment to a computed gap, the
+            # citations it may carry) is decided deterministically in `_build_points` below,
+            # never read off the model's sampling.
+            temperature=None,
         )
         response = self._llm.generate(request)
         g.maybe_record_usage(self._tracer, response)

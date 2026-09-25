@@ -101,8 +101,10 @@ def build_root_agent(settings: Settings | None = None) -> LlmAgent:
     if grounding_agent is not None:
         tools.append(AgentTool(agent=grounding_agent))
 
+    # No temperature: the conversational root agent drafts and narrates, so sampling is left
+    # to the model's own default rather than pinned (and some models reject the parameter).
+    # What is consequential (suitability, gaps) comes back from the deterministic FunctionTools.
     generate_content_config = types.GenerateContentConfig(
-        temperature=0.2,
         thinking_config=types.ThinkingConfig(thinking_budget=-1),
     )
 

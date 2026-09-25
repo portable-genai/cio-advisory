@@ -30,9 +30,9 @@
  * **Print shows everything.** A collapsed briefing that prints collapsed is a broken
  * deliverable, so `onbeforeprint` opens every stage.
  *
- * The provenance banner is deliberately NOT part of this: it lives in `app/layout.tsx`
- * outside `children`, so nothing here can collapse, push, or hide it. That is structural
- * rather than a convention, because a banner that scrolled off under an auto-collapse is a
+ * The model pills are deliberately NOT part of this: they live in `app/layout.tsx` outside
+ * `children`, so nothing here can collapse, push, or hide them. That is structural rather than
+ * a convention, because a provenance strip that scrolled off under an auto-collapse is a
  * defect this fleet has already shipped once.
  *
  * Native `<details>`/`<summary>` carries the keyboard and screen-reader behaviour, and the

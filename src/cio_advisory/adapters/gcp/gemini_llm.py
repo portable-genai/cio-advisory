@@ -7,9 +7,14 @@ synthesis uses ``gemini-3.5-flash`` (thinking=high) and triage/classification us
 ``gemini-2.0-flash`` are never used.
 
 The adapter maps the domain :class:`LlmRequest` onto ``client.models.generate_content``
-(system instruction, temperature, max-output-tokens, a :class:`ThinkingConfig` whose level
-is mapped from ``request.thinking``, and structured-output config when a response schema is
-supplied), and maps ``usage_metadata`` back onto :class:`TokenUsage`.
+(system instruction, temperature when the request pins one, max-output-tokens, a
+:class:`ThinkingConfig` whose level is mapped from ``request.thinking``, and structured-output
+config when a response schema is supplied), and maps ``usage_metadata`` back onto
+:class:`TokenUsage`. A request with ``temperature=None`` sends no temperature at all, so the
+model samples at its own default; ``classify`` pins ``0.0`` because its output is a label.
+
+Every successful call notes the model it called (``hex_service_kit.provenance.note_model``), so
+the console's model pill names what answered rather than what configuration says would.
 
 All Google Cloud / GenAI SDK imports are lazy so the on-prem / test profile imports this
 module without ``google-genai`` installed.
@@ -18,6 +23,8 @@ module without ``google-genai`` installed.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+from hex_service_kit import provenance
 
 from ...config import Settings
 from ...domain.models import (
@@ -70,6 +77,7 @@ class GeminiLLMAdapter:
             contents=contents,
             config=config,
         )
+        provenance.note_model(model)
 
         return LlmResponse(
             text=getattr(response, "text", "") or "",
@@ -90,8 +98,9 @@ class GeminiLLMAdapter:
             f"Text:\n{text}"
         )
 
+        model = self._models.triage
         response = client.models.generate_content(
-            model=self._models.triage,
+            model=model,
             contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
             config=types.GenerateContentConfig(
                 temperature=0.0,
@@ -102,6 +111,7 @@ class GeminiLLMAdapter:
             ),
         )
 
+        provenance.note_model(model)
         raw = (getattr(response, "text", "") or "").strip()
         return self._match_label(raw, labels)
 
@@ -126,12 +136,15 @@ class GeminiLLMAdapter:
         from google.genai import types
 
         kwargs: dict[str, Any] = {
-            "temperature": request.temperature,
             "max_output_tokens": request.max_output_tokens,
             "thinking_config": types.ThinkingConfig(
                 thinking_level=self._thinking_level(request.thinking, types)
             ),
         }
+        if request.temperature is not None:
+            # Omitted, not defaulted, when the call site left sampling free: some models reject
+            # the parameter outright, so "free" must mean absent rather than 1.0.
+            kwargs["temperature"] = request.temperature
         if request.system_instruction:
             kwargs["system_instruction"] = request.system_instruction
         if request.response_schema is not None:
