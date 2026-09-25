@@ -9,6 +9,6 @@ There is deliberately no local model server. A system whose house views are rese
 from the open web cannot answer without leaving the data centre, so generating the
 narrative on a laptop model beside that research would describe a deployment nobody
 would buy (org decision, 2026-08-30). The profile therefore needs Application Default
-Credentials and a ``GOOGLE_CLOUD_PROJECT``, and the UI provenance banner states that the
-runtime is local while the model is Gemini.
+Credentials and a ``GOOGLE_CLOUD_PROJECT``, and the UI's model pill names the Gemini model that
+answered while its title says the runtime is local.
 """

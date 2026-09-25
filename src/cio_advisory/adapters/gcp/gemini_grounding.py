@@ -6,6 +6,11 @@ leaves the tenancy when grounding is off. Because only one built-in tool is allo
 agent, the agent layer isolates ``google_search`` in its own sub-agent; this adapter is the
 synchronous equivalent used by the domain services.
 
+The call attaches the ``google_search`` tool, so a successful one notes both the model it
+called and that it searched (``hex_service_kit.provenance``): the console then shows the
+``Search`` pill beside the answering model. Temperature stays pinned at ``0.0``: the output
+used is the list of citations the search returned, which is retrieval, not drafting.
+
 The ``google.genai`` import is lazy so on-prem and test profiles import this module with no
 GenAI SDK installed.
 """
@@ -13,6 +18,8 @@ GenAI SDK installed.
 from __future__ import annotations
 
 from typing import Any
+
+from hex_service_kit import provenance
 
 from ...config import Settings
 from ...domain.models import WebCitation
@@ -48,14 +55,17 @@ class GeminiGoogleSearchGroundingAdapter:
         from google.genai import types
 
         client = self._get_client()
+        model = self._settings.models.triage
         response = client.models.generate_content(
-            model=self._settings.models.triage,
+            model=model,
             contents=query,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
                 temperature=0.0,
             ),
         )
+        provenance.note_model(model)
+        provenance.note_search()
         return self._extract_citations(response)[:max_results]
 
     @staticmethod

@@ -51,7 +51,8 @@ GOOGLE_CLOUD_PROJECT=<project> CIO_PROFILE=live python -m cio_advisory.api.app
 # 3. In the UI (:3000): download the client template, register a portfolio, Build briefing.
 #    API equivalents: GET /v1/clients/template, POST /v1/clients,
 #    GET /v1/clients/{id}/portfolio (the gaps, no model call), POST /v1/briefing.
-#    The banner at the top of every page states the runtime and the answering model.
+#    Two pills at the top right name the model that answered the last request, and show
+#    Search when that answer came from the grounded web research.
 ```
 
 ---

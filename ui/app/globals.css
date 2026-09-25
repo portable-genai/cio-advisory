@@ -64,6 +64,45 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+/* The model pills: which model answered the last request, and Search when it searched.
+   Fixed at the top right, above the page content, inside the 24px (16px embedded) padding
+   `main` carries, so they stay in view without covering any of the console's own controls.
+   Each pill carries its own opaque background and text colour, so it reads over whatever
+   scrolls beneath it. The console pins `color-scheme: light`, so there is no dark variant. */
+.model-pills {
+  position: fixed;
+  top: 4px;
+  right: 10px;
+  z-index: 20;
+  display: flex;
+  gap: 6px;
+  max-width: calc(100vw - 20px);
+}
+
+.model-pill {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 9px;
+  border: 1px solid;
+  border-radius: 9999px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.model-pill.configured {
+  @apply border-dashed border-ink-300 bg-ink-50 text-ink-500;
+}
+
+.model-pill.answered {
+  @apply border-ink-900 bg-ink-900 text-white;
+}
+
+.model-pill.search {
+  @apply border-emerald-700 bg-emerald-700 text-white;
+}
+
 /* Thin, professional scrollbars for the dense panels. */
 .scroll-thin {
   scrollbar-width: thin;
