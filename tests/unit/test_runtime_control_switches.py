@@ -33,6 +33,7 @@ from cio_advisory.api.app import app
 from cio_advisory.cli.main import app as cli_app
 from cio_advisory.config import (
     GUARDRAIL_ENV,
+    HUMAN_REVIEW_IAP_AUDIENCE_ENV,
     HUMAN_REVIEW_URL_ENV,
     PII_REDACTION_ENV,
     REVIEW_ROUTING_ENV,
@@ -53,7 +54,7 @@ _BALANCED = sample_clients.BALANCED_CLIENT_ID
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (*_SWITCHES, HUMAN_REVIEW_URL_ENV):
+    for name in (*_SWITCHES, HUMAN_REVIEW_URL_ENV, HUMAN_REVIEW_IAP_AUDIENCE_ENV):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CIO_PROFILE", "local")
     monkeypatch.setenv("CIO_LOCAL_DB", ":memory:")
@@ -141,6 +142,9 @@ def test_routing_on_without_a_console_refuses_at_boot(
 def test_routing_on_with_a_console_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CIO_PROFILE", "gcp")
     monkeypatch.setenv(HUMAN_REVIEW_URL_ENV, "https://review.example.test")
+    monkeypatch.setenv(
+        HUMAN_REVIEW_IAP_AUDIENCE_ENV, "1234567890-fictionaledgeclient.apps.googleusercontent.com"
+    )
     assert Settings.load(_CONFIG).controls.review_routing is True
 
 
@@ -161,6 +165,9 @@ def test_a_model_armor_guardrail_with_no_template_refuses_at_boot(
 
     monkeypatch.setenv("CIO_PROFILE", "gcp")
     monkeypatch.setenv(HUMAN_REVIEW_URL_ENV, "https://review.example.test")
+    monkeypatch.setenv(
+        HUMAN_REVIEW_IAP_AUDIENCE_ENV, "1234567890-fictionaledgeclient.apps.googleusercontent.com"
+    )
     loaded = Settings.load(_CONFIG)
     empty = Settings(
         profile="gcp", adapters=loaded.adapters, model_armor=ModelArmorSettings(template_id=" ")

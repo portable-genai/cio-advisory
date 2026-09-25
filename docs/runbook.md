@@ -61,10 +61,23 @@ does nothing, and a process with any control off logs one warning at startup nam
 Under `gcp` or `platform`, a control that is on must be able to work, so the process refuses to
 boot when:
 
-- review routing is on and `HUMAN_REVIEW_URL` is not set. Name the console, or set
-  `CIO_REVIEW_ROUTING=off` to run without routing. Unsetting `HUMAN_REVIEW_URL` does not pause
-  routing; the switch does. The corpus loaders (`make load-demo-book`,
-  `make ingest-house-views`) escalate nothing and state routing off for their own run.
+- review routing is on and `HUMAN_REVIEW_URL` is not set, or, under `gcp`, either
+  `HUMAN_REVIEW_URL` or `HUMAN_REVIEW_IAP_AUDIENCE` is not set (the refusal names both and lists
+  which is missing). Name them, or set `CIO_REVIEW_ROUTING=off` to run without routing.
+  Unsetting `HUMAN_REVIEW_URL` does not pause routing; the switch does. The corpus loaders
+  (`make load-demo-book`, `make ingest-house-views`) escalate nothing and state routing off for
+  their own run.
+- `HUMAN_REVIEW_IAP_AUDIENCE` holds a backend-service path (`/projects/.../backendServices/...`)
+  instead of the IAP OAuth client id.
+
+Under `gcp` the deployed `human-review-console` is an embedded app behind the portal's IAP edge.
+`HUMAN_REVIEW_URL` is its edge path (`https://<edge-host>/apps/human-review-console/api`) and
+`HUMAN_REVIEW_IAP_AUDIENCE` is the IAP OAuth client id that edge accepts. The router mints a
+fresh ID token for that audience with the service's workload identity on every submission,
+instead of sending `S2S_TOKEN`, and the console authenticates this service from the IAP
+assertion the portal forwards, so this service account must be in the console's
+`REVIEW_IAP_SERVICE_CALLERS_JSON` allowlist. With the audience unset (`platform`), the router
+keeps the static `S2S_TOKEN` bearer; an emptied audience refuses.
 - the guardrail is on, bound to Model Armor, and the template id is empty. Name one, or set
   `CIO_GUARDRAIL=off`.
 
@@ -79,8 +92,9 @@ masking it as a phone number.
 | Symptom | Likely cause | Action |
 |---|---|---|
 | CLI exits with code 2, "not available under profile 'onprem'" | A placeholder adapter was hit | Use `CIO_PROFILE=gcp` or `platform` for live commands. |
-| Boot fails: "Review routing is on under profile 'gcp' but HUMAN_REVIEW_URL is not set" | No review console is named for a managed process | Set `HUMAN_REVIEW_URL` to the `human-review-console` base URL, or `CIO_REVIEW_ROUTING=off` to run without routing. |
-| A response carries `review_routing: "failed"` | The console was unreachable or refused the hand-off; the briefing is NOT queued for review | Read the WARNING "human-review hand-off failed: <exception type>", fix the console or credentials, and re-run the briefing. |
+| Boot fails: "Review routing is on under profile 'platform' but HUMAN_REVIEW_URL is not set" | No review console is named for a managed process | Set `HUMAN_REVIEW_URL` to the `human-review-console` base URL, or `CIO_REVIEW_ROUTING=off` to run without routing. |
+| Boot fails: "Review routing is on under profile 'gcp', which reaches the human-review-console through the portal's IAP edge ..." | The console's edge path or the IAP edge audience is missing; the message lists which | Set both `HUMAN_REVIEW_URL` and `HUMAN_REVIEW_IAP_AUDIENCE`, or `CIO_REVIEW_ROUTING=off` to run without routing. |
+| A response carries `review_routing: "failed"` | The console was unreachable or refused the hand-off; the briefing is NOT queued for review | Read the WARNING "human-review hand-off failed: <exception type>", fix the console or credentials, and re-run the briefing. A 401 or 403 under `gcp` means `HUMAN_REVIEW_IAP_AUDIENCE` is not the edge's client id, or this service account is not in the console's `REVIEW_IAP_SERVICE_CALLERS_JSON`. |
 | `RetrievalEmptyError` under `platform` | The `enterprise-knowledge-base` governed KB returned no house views | Check `KNOWLEDGE_BASE_URL` and that the CIO corpus is indexed there. |
 | `RetrievalEmptyError` under `gcp` | The Agent Search store holds no house views for the caller's tenant | Run `make ingest-house-views PROJECT=<id> TENANT=<tenant>` (see below). Terraform creates the store empty, and a document under another tenant is invisible by design. |
 | `PortfolioUnavailableError` | No rows for the client in BigQuery | Confirm the client id and that the book is loaded (`make load-demo-book`). A client loaded under a different tenant reads as absent by design: the entitlement gate fails closed. |
