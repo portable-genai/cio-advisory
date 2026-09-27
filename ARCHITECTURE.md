@@ -82,7 +82,7 @@ port, that `onprem` fails fast, and that `local` answers in-process.
 | `session` | Vertex Sessions | in-process | n/a | placeholder |
 | `memory` | Vertex Memory Bank | in-process | n/a | placeholder |
 | `audit` | Cloud Logging WORM | append-only SQLite | `agent-observability` service | placeholder |
-| `tracer` | Cloud Trace | no-op | n/a | placeholder |
+| `tracer` | Cloud Trace, through the agent-observability collector | no-op | n/a | placeholder |
 | `evaluation` | Gen AI eval | in-repo offline gate | `model-quality-gate` service | placeholder |
 | `registry` | A2A in-process | in-process | `agent-registry` service | placeholder |
 | `tool_catalog` | MCP | in-process | n/a | placeholder |
