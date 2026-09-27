@@ -1,5 +1,10 @@
 """The Model Armor adapter blocks on a match, and fails closed on no verdict or an API error.
 
+It also fails closed on an INCOMPLETE screen: ``invocation_result`` ``PARTIAL`` or
+``FAILURE`` means some or all filters were skipped or failed, and a skipped filter reports
+``NO_MATCH_FOUND``. Padding a prompt past the prompt-injection filter's token limit would
+otherwise get it through unscreened, so only ``NO_MATCH_FOUND`` with ``SUCCESS`` allows.
+
 ``FilterMatchState`` is a proto-plus ``IntEnum``. On Python 3.11+
 ``str(FilterMatchState.MATCH_FOUND)`` is ``'2'``, so a mapping that searched the ``str()``
 for ``"MATCH_FOUND"`` allowed every flagged prompt through, and a stub that carried the state
@@ -40,12 +45,25 @@ class _MirrorState(enum.IntEnum):
     MATCH_FOUND = 2
 
 
+class _MirrorInvocation(enum.IntEnum):
+    """``modelarmor_v1.InvocationResult``'s members, by name and number."""
+
+    INVOCATION_RESULT_UNSPECIFIED = 0
+    SUCCESS = 1
+    PARTIAL = 2
+    FAILURE = 3
+
+
 def _map(response: Any, direction: Direction = Direction.INPUT) -> Any:
     return ModelArmorGuardrailAdapter._map_result(response, direction, TEXT)
 
 
-def _mirror_response(state: _MirrorState) -> SimpleNamespace:
-    return SimpleNamespace(sanitization_result=SimpleNamespace(filter_match_state=state))
+def _mirror_response(
+    state: _MirrorState, invocation: _MirrorInvocation | None = _MirrorInvocation.SUCCESS
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        sanitization_result=SimpleNamespace(filter_match_state=state, invocation_result=invocation)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -70,6 +88,47 @@ def test_no_match_found_allows_sdk_free(direction: Direction) -> None:
     assert verdict.allowed is True
     assert verdict.sanitized_text == TEXT
     assert verdict.findings == ()
+
+
+@pytest.mark.parametrize("direction", DIRECTIONS)
+@pytest.mark.parametrize("invocation", list(_MirrorInvocation), ids=lambda m: m.name)
+def test_match_found_blocks_however_many_filters_ran_sdk_free(
+    direction: Direction, invocation: _MirrorInvocation
+) -> None:
+    verdict = _map(_mirror_response(_MirrorState.MATCH_FOUND, invocation), direction)
+    assert verdict.allowed is False
+    assert verdict.sanitized_text is None
+
+
+@pytest.mark.parametrize("direction", DIRECTIONS)
+@pytest.mark.parametrize(
+    "invocation",
+    [
+        _MirrorInvocation.PARTIAL,
+        _MirrorInvocation.FAILURE,
+        _MirrorInvocation.INVOCATION_RESULT_UNSPECIFIED,
+        None,
+    ],
+    ids=["PARTIAL", "FAILURE", "UNSPECIFIED", "absent"],
+)
+def test_no_match_from_an_incomplete_screen_blocks_sdk_free(
+    direction: Direction, invocation: _MirrorInvocation | None
+) -> None:
+    """A skipped filter reports no match. That is not a pass: the text was not screened."""
+    verdict = _map(_mirror_response(_MirrorState.NO_MATCH_FOUND, invocation), direction)
+    assert verdict.allowed is False
+    assert verdict.sanitized_text is None
+    assert "no complete filter decision" in verdict.reason
+
+
+def test_exactly_one_combination_allows_sdk_free() -> None:
+    allowed = [
+        (state.name, invocation.name)
+        for state in _MirrorState
+        for invocation in _MirrorInvocation
+        if _map(_mirror_response(state, invocation)).allowed
+    ]
+    assert allowed == [("NO_MATCH_FOUND", "SUCCESS")]
 
 
 @pytest.mark.parametrize(
@@ -99,18 +158,20 @@ class _FakeClient:
         self._response = response
         self._error = error
         self.requests: list[Any] = []
+        self.timeouts: list[Any] = []
 
-    def _answer(self, request: Any) -> Any:
+    def _answer(self, request: Any, timeout: Any) -> Any:
         self.requests.append(request)
+        self.timeouts.append(timeout)
         if self._error is not None:
             raise self._error
         return self._response
 
-    def sanitize_user_prompt(self, request: Any) -> Any:
-        return self._answer(request)
+    def sanitize_user_prompt(self, *, request: Any, timeout: Any = None) -> Any:
+        return self._answer(request, timeout)
 
-    def sanitize_model_response(self, request: Any) -> Any:
-        return self._answer(request)
+    def sanitize_model_response(self, *, request: Any, timeout: Any = None) -> Any:
+        return self._answer(request, timeout)
 
 
 def _ma() -> Any:
@@ -123,8 +184,18 @@ def _adapter(client: _FakeClient) -> ModelArmorGuardrailAdapter:
     return adapter
 
 
-def _real_response(direction: Direction, state_name: str | None) -> Any:
-    """A real sanitize response; ``state_name=None`` leaves ``sanitization_result`` unset."""
+def _real_response(
+    direction: Direction,
+    state_name: str | None,
+    invocation_name: str = "SUCCESS",
+    *,
+    skipped: bool = False,
+) -> Any:
+    """A real sanitize response; ``state_name=None`` leaves ``sanitization_result`` unset.
+
+    ``skipped`` adds the prompt-injection filter as not having run, the shape a prompt padded
+    past that filter's token limit produces.
+    """
     ma = _ma()
     cls = (
         ma.SanitizeUserPromptResponse
@@ -133,14 +204,32 @@ def _real_response(direction: Direction, state_name: str | None) -> Any:
     )
     if state_name is None:
         return cls()
-    state = ma.FilterMatchState[state_name]
-    return cls(sanitization_result=ma.SanitizationResult(filter_match_state=state))
+    filter_results = {}
+    if skipped:
+        filter_results["pi_and_jailbreak"] = ma.FilterResult(
+            pi_and_jailbreak_filter_result=ma.PiAndJailbreakFilterResult(
+                execution_state=ma.FilterExecutionState.EXECUTION_SKIPPED,
+                match_state=ma.FilterMatchState.NO_MATCH_FOUND,
+            )
+        )
+    return cls(
+        sanitization_result=ma.SanitizationResult(
+            filter_match_state=ma.FilterMatchState[state_name],
+            invocation_result=ma.InvocationResult[invocation_name],
+            filter_results=filter_results,
+        )
+    )
 
 
-def test_the_mirror_matches_the_real_enum() -> None:
-    real = _ma().FilterMatchState
-    assert {m.name: int(m) for m in real} == {m.name: int(m) for m in _MirrorState}
-    assert "MATCH_FOUND" not in str(real.MATCH_FOUND)
+@pytest.mark.parametrize(
+    ("mirror", "real_name"),
+    [(_MirrorState, "FilterMatchState"), (_MirrorInvocation, "InvocationResult")],
+    ids=["FilterMatchState", "InvocationResult"],
+)
+def test_the_mirror_matches_the_real_enum(mirror: Any, real_name: str) -> None:
+    real = getattr(_ma(), real_name)
+    assert {m.name: int(m) for m in real} == {m.name: int(m) for m in mirror}
+    assert "MATCH_FOUND" not in str(_ma().FilterMatchState.MATCH_FOUND)
 
 
 @pytest.mark.parametrize("direction", DIRECTIONS)
@@ -171,6 +260,26 @@ def test_no_verdict_fails_closed(direction: Direction, state_name: str | None) -
     verdict = _adapter(client).screen(TEXT, direction)
     assert verdict.allowed is False
     assert verdict.sanitized_text is None
+
+
+@pytest.mark.parametrize("direction", DIRECTIONS)
+@pytest.mark.parametrize("invocation_name", ["PARTIAL", "FAILURE", "INVOCATION_RESULT_UNSPECIFIED"])
+def test_no_match_from_a_screen_where_filters_did_not_run_blocks(
+    direction: Direction, invocation_name: str
+) -> None:
+    client = _FakeClient(_real_response(direction, "NO_MATCH_FOUND", invocation_name, skipped=True))
+    verdict = _adapter(client).screen(TEXT, direction)
+    assert verdict.allowed is False
+    assert verdict.sanitized_text is None
+    assert "no complete filter decision" in verdict.reason
+
+
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_every_call_carries_the_deadline(direction: Direction) -> None:
+    client = _FakeClient(_real_response(direction, "NO_MATCH_FOUND"))
+    _adapter(client).screen(TEXT, direction)
+    assert client.timeouts == [Settings().model_armor.timeout_seconds]
+    assert client.timeouts[0] > 0
 
 
 def test_api_errors_propagate() -> None:

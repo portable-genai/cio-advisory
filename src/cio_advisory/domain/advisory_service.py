@@ -10,12 +10,18 @@ PII / financial data, the FULL R1 safety pipeline applies (redact -> guardrail I
       -> portfolio.get_profile + get_portfolio
       -> house_view.retrieve (A2 governed RAG)
       -> TalkingPointsService.synthesise      [LLM + SuitabilityPolicy per point]
+           guardrail.screen(INPUT) on the     [blocked -> audit BLOCKED + raise]
+           assembled prompt, as sent
       -> drop/flag UNSUITABLE points
       -> compute PortfolioAlignment
       -> attach not-advice disclaimer
       -> guardrail.screen(OUTPUT)             [blocked -> audit BLOCKED + raise]
+         on every string the briefing shows, citations included
       -> CioReviewPolicy (always requires review)
       -> audit.record(redacted prompt + response)
+
+Every screen fails CLOSED: a block, and a guardrail that raised instead of deciding (a Model
+Armor error or deadline), are both audited BLOCKED before the refusal reaches the caller.
 
 An advisory briefing is consequential, so a blocked input/output or an unavailable
 portfolio is a hard error : the service never returns a partial briefing an RM might act
@@ -133,12 +139,7 @@ class AdvisoryService:
         redacted_id = redaction.text
 
         # 2) Guardrail screen (INPUT). Blocked -> audit BLOCKED + raise.
-        in_verdict: GuardrailVerdict = self._guardrail.screen(redacted_id, Direction.INPUT)
-        if not in_verdict.allowed:
-            self._write_audit(actor, redacted_id, "", Decision.BLOCKED)
-            raise GuardrailBlockedError(
-                in_verdict.reason or "advisory request blocked by guardrail"
-            )
+        self._screen(redacted_id, Direction.INPUT, actor=actor, redacted_id=redacted_id)
 
         # 3) Load the client's profile (cheap), then enforce OBJECT-LEVEL AUTHORIZATION
         #    (C2) against the verified principal BEFORE loading the portfolio or generating
@@ -177,21 +178,27 @@ class AdvisoryService:
         #    edited down for them. What the model is handed first is what it writes about
         #    first, and that ordering is arithmetic rather than the model's judgement.
         ranked = ga.rank_by_relevance(house_views, portfolio, summary.allocation_gaps)
-        points = self._talking_points.synthesise(profile, portfolio, ranked, summary=summary)
+        #    The prompt the model receives is INPUT-screened as sent (inside synthesise): it
+        #    carries the profile, the holdings and every house view's text, and under the live
+        #    profile those house views are public-web text another model wrote.
+        points = self._talking_points.synthesise(
+            profile,
+            portfolio,
+            ranked,
+            summary=summary,
+            screen_prompt=lambda prompt: self._screen(
+                prompt, Direction.INPUT, actor=actor, redacted_id=redacted_id
+            ),
+        )
 
         # 6) Compute portfolio alignment: every asset class against the model portfolio's
         #    band, and every theme against the gap it would close or the exposure it bears
         #    on. Arithmetic and set intersection, so a reviewer can replay it.
         alignment = self._alignment(ranked, portfolio, summary)
 
-        # 7) Output guardrail screen on the assembled briefing text (R1).
-        out_text = self._briefing_text(points, alignment)
-        out_verdict: GuardrailVerdict = self._guardrail.screen(out_text, Direction.OUTPUT)
-        if not out_verdict.allowed:
-            self._write_audit(actor, redacted_id, "", Decision.BLOCKED, direction=Direction.OUTPUT)
-            raise GuardrailBlockedError(
-                out_verdict.reason or "advisory output blocked by guardrail"
-            )
+        # 7) Output guardrail screen on every string the briefing shows (R1).
+        out_text = self._briefing_text(points, alignment, ranked)
+        self._screen(out_text, Direction.OUTPUT, actor=actor, redacted_id=redacted_id)
 
         # 8) Maker-checker: a briefing always requires review; escalate on REVIEW/UNSUITABLE.
         requires_review = self._review.requires_review(tuple(points))
@@ -220,6 +227,44 @@ class AdvisoryService:
             with contextlib.suppress(Exception):
                 self._review_router.route(briefing, maker=actor, tenant=principal.tenant)
         return briefing
+
+    # ------------------------------------------------------------------ #
+    # Guardrail
+    # ------------------------------------------------------------------ #
+    def _screen(self, text: str, direction: Direction, *, actor: str, redacted_id: str) -> str:
+        """Screen one text in one direction; return the text to use from here on, or refuse.
+
+        A block raises :class:`GuardrailBlockedError`. A guardrail that raised instead of
+        deciding (a Model Armor API error or deadline) is refused too, with its own error
+        reaching the caller. Both are audited ``Decision.BLOCKED`` first, never with the
+        refused text, so the WORM trail holds the refused attempt even though no briefing was
+        produced. The returned text is the verdict's ``sanitized_text`` exactly as given.
+        """
+        try:
+            verdict: GuardrailVerdict = self._guardrail.screen(text, direction)
+        except Exception as exc:
+            reason = f"guardrail unavailable ({type(exc).__name__})"
+            self._write_audit(
+                actor,
+                redacted_id,
+                "",
+                Decision.BLOCKED,
+                metadata={"reason": reason},
+                direction=direction,
+            )
+            raise
+        if not verdict.allowed or verdict.sanitized_text is None:
+            reason = verdict.reason or f"advisory {direction.value} blocked by guardrail"
+            self._write_audit(
+                actor,
+                redacted_id,
+                "",
+                Decision.BLOCKED,
+                metadata={"reason": reason},
+                direction=direction,
+            )
+            raise GuardrailBlockedError(reason)
+        return verdict.sanitized_text
 
     # ------------------------------------------------------------------ #
     # Loading
@@ -340,11 +385,25 @@ class AdvisoryService:
         )
 
     @staticmethod
-    def _briefing_text(points: list[TalkingPoint], alignment: PortfolioAlignment) -> str:
-        """Flatten the briefing into a single string for the output guardrail screen."""
+    def _briefing_text(
+        points: list[TalkingPoint],
+        alignment: PortfolioAlignment,
+        house_views: list[HouseView],
+    ) -> str:
+        """Flatten every string the briefing shows into one text for the OUTPUT screen.
+
+        That includes the citations (title, URL, snippet) and the house views the briefing
+        carries, not only the talking points: under the live profile those are public-web text,
+        and a citation the screen never read would reach the RM unscreened.
+        """
         chunks = [NOT_ADVICE_DISCLAIMER]
         for p in points:
             chunks.append(f"{p.headline}\n{p.body}")
+            chunks.extend(_citation_text(c) for c in p.citations)
+        for hv in house_views:
+            chunks.append(f"{hv.theme}\n{hv.rationale}")
+            if hv.citation is not None:
+                chunks.append(_citation_text(hv.citation))
         chunks.append(
             "alignment: in-line="
             + ", ".join(alignment.themes_in_line)
@@ -412,6 +471,10 @@ class AdvisoryService:
             self._audit.record(event)
         except Exception:  # noqa: BLE001 - audit failure must not crash the request
             return
+
+
+def _citation_text(citation: Citation) -> str:
+    return "\n".join(part for part in (citation.title, citation.url, citation.snippet) if part)
 
 
 class _Briefing(AdvisoryBriefing):

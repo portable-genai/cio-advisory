@@ -16,7 +16,8 @@ installed (SPEC §4).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from ..config import Settings
 
@@ -35,8 +36,18 @@ _GROUNDING_INSTRUCTION = (
 )
 
 
-def build_grounding_agent(settings: Settings) -> LlmAgent | None:
-    """Build the ``google_search``-only grounding sub-agent, or ``None`` if disabled."""
+def build_grounding_agent(
+    settings: Settings, callbacks: dict[str, Callable[..., Any]]
+) -> LlmAgent | None:
+    """Build the ``google_search``-only grounding sub-agent, or ``None`` if disabled.
+
+    ``callbacks`` are the model-boundary callbacks (``agent.callbacks.build_callbacks``), and
+    are REQUIRED: ``AgentTool`` runs this agent on its own, so the root agent's callbacks never
+    see its generation calls. Without its own, a ``google_search`` call would go out unscreened
+    and its web-derived answer would come back unscreened. The before- and after-model
+    callbacks are attached; the turn-end audit stays with the root agent, which receives this
+    agent's answer as a tool result and INPUT-screens it before its own model reads it.
+    """
     if not settings.grounding_enabled:
         return None
 
@@ -52,4 +63,6 @@ def build_grounding_agent(settings: Settings) -> LlmAgent | None:
         ),
         instruction=_GROUNDING_INSTRUCTION,
         tools=[google_search],
+        before_model_callback=callbacks["before_model_callback"],
+        after_model_callback=callbacks["after_model_callback"],
     )

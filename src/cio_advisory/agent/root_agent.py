@@ -7,7 +7,8 @@ hosts. It wires together:
 * the isolated ``google_search`` grounding **sub-agent** as an ``AgentTool``
   (``agent.grounding_agent``; one built-in tool per agent : SPEC §3),
 * the defense-in-depth model-boundary **callbacks** (redact + guardrail + audit;
-  ``agent.callbacks``), and
+  ``agent.callbacks``), on this agent AND on the grounding sub-agent, whose generation calls
+  ``AgentTool`` runs outside this agent's callbacks, and
 * the reasoning model ``settings.models.reasoning`` (``gemini-3.5-flash``) at
   ``thinking=high`` (SPEC §3).
 
@@ -97,7 +98,7 @@ def build_root_agent(settings: Settings | None = None) -> LlmAgent:
 
     tools: list[Any] = list(build_function_tools())
 
-    grounding_agent = build_grounding_agent(settings)
+    grounding_agent = build_grounding_agent(settings, callbacks)
     if grounding_agent is not None:
         tools.append(AgentTool(agent=grounding_agent))
 

@@ -13,6 +13,7 @@ advice. Pure domain code : no Google Cloud / ADK imports.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from . import _grounded as g
@@ -71,14 +72,23 @@ class TalkingPointsService:
         portfolio: Portfolio,
         house_views: list[HouseView],
         summary: PortfolioSummary | None = None,
+        *,
+        screen_prompt: Callable[[str], str],
     ) -> list[TalkingPoint]:
         """Synthesise talking points, attach suitability and alignment, drop UNSUITABLE.
 
-        The caller (AdvisoryService) has already redacted and screened the inputs, retrieved
+        The caller (AdvisoryService) has already redacted and screened the request, retrieved
         the house views and computed the gaps; this method owns synthesis, suitability and
         the link from each point back to the computed gap it is about. ``summary`` is
         optional so a caller with no model portfolio still gets talking points, just without
         the allocation context.
+
+        ``screen_prompt`` INPUT-screens the assembled prompt and returns the text to send, or
+        raises. It is required, not optional: the prompt carries the profile's objectives and
+        constraints, the holdings and every house view's theme and rationale, and under the
+        live profile the house views are public-web text another model wrote, so it is the
+        text most exposed to indirect prompt injection in the whole pipeline. What the model
+        receives is exactly what the screen handed back.
         """
         gaps = summary.allocation_gaps if summary is not None else ()
         model = summary.model_portfolio if summary is not None else None
@@ -91,6 +101,7 @@ class TalkingPointsService:
             allocation_gaps=ga.render_gaps(gaps),
             house_views=house_view_block,
         )
+        user = screen_prompt(user)
         request = g.build_llm_request(
             system_instruction=system,
             user_content=user,
