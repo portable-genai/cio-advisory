@@ -68,24 +68,42 @@ class ModelArmorGuardrailAdapter:
 
     @staticmethod
     def _map_result(response: Any, direction: Direction, original: str) -> GuardrailVerdict:
+        """Map a sanitize response to a verdict; anything short of a clean pass blocks.
+
+        ``filter_match_state`` is a proto-plus ``IntEnum``, and on Python 3.11+ its ``str()``
+        is the NUMBER (``'2'``), never the member name. The block decision therefore reads
+        ``.name``. Only ``NO_MATCH_FOUND`` allows: ``MATCH_FOUND`` blocks, and so does a
+        missing or empty ``sanitization_result`` (proto-plus hands back a default message whose
+        state is ``FILTER_MATCH_STATE_UNSPECIFIED``), because a screen that returned no answer
+        has not cleared the text. API errors are not caught here; they propagate.
+        """
         result = getattr(response, "sanitization_result", None)
-        match_state = str(getattr(result, "filter_match_state", "")).upper()
-        blocked = "MATCH_FOUND" in match_state and "NO_MATCH" not in match_state
-        findings = (
-            (
+        match_state = getattr(result, "filter_match_state", None)
+        state_name = getattr(match_state, "name", None)
+        allowed = state_name == "NO_MATCH_FOUND"
+        if allowed:
+            return GuardrailVerdict(
+                allowed=True,
+                direction=direction,
+                findings=(),
+                sanitized_text=original,
+                reason="ok",
+            )
+        detail = (
+            "Model Armor filter match"
+            if state_name == "MATCH_FOUND"
+            else f"Model Armor returned no usable verdict (filter_match_state={state_name})"
+        )
+        return GuardrailVerdict(
+            allowed=False,
+            direction=direction,
+            findings=(
                 GuardrailFinding(
                     category=GuardrailCategory.OTHER,
                     confidence="high",
-                    detail="Model Armor filter match",
+                    detail=detail,
                 ),
-            )
-            if blocked
-            else ()
-        )
-        return GuardrailVerdict(
-            allowed=not blocked,
-            direction=direction,
-            findings=findings,
-            sanitized_text=None if blocked else original,
-            reason="blocked by Model Armor" if blocked else "ok",
+            ),
+            sanitized_text=None,
+            reason="blocked by Model Armor",
         )
