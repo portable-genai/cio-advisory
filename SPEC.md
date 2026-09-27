@@ -69,7 +69,7 @@ The `local` profile is SDK-free and emulator-free by default; for higher fidelit
 | Guardrail | Model Armor (`sanitizeUserPrompt` / `sanitizeModelResponse`) |
 | PII redaction | Sensitive Data Protection / DLP (`deidentifyContent`) |
 | Audit (WORM) | Cloud Logging locked bucket, retention 2557 days |
-| Tracing | Cloud Trace via OpenTelemetry (message content capture OFF) |
+| Tracing | OpenTelemetry, OTLP through the agent-observability collector to Cloud Trace (`hex_service_kit.tracing.build_tracer`; message content capture OFF) |
 | Eval gate | Gen AI evaluation service |
 | Hosting | Agent Runtime (reasoningEngine) |
 

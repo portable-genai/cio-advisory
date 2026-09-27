@@ -191,8 +191,8 @@ adapters:
     platform: cio_advisory.adapters.platform.remote_audit:RemoteAuditAdapter
     onprem: cio_advisory.adapters.onprem.audit:OnPremAuditAdapter
   tracer:
-    gcp: cio_advisory.adapters.gcp.cloud_trace_tracer:CloudTraceTracerAdapter
-    platform: cio_advisory.adapters.gcp.cloud_trace_tracer:CloudTraceTracerAdapter
+    gcp: cio_advisory.adapters.gcp.tracer:CloudTracerAdapter
+    platform: cio_advisory.adapters.gcp.tracer:CloudTracerAdapter
     local: cio_advisory.adapters.local.tracer:LocalNoopTracerAdapter
     live: cio_advisory.adapters.local.tracer:LocalNoopTracerAdapter
     onprem: cio_advisory.adapters.onprem.tracer:OnPremTracerAdapter
