@@ -70,10 +70,26 @@ class RemoteGuardrailAdapter:
             )
             for item in (body.get("findings") or ())
         )
+        # Allowed only on the JSON literal ``true``. ``bool()`` of the string "false", of 1 or
+        # of a non-empty object is True, so a gateway answering in any other shape is a block.
+        # An allowed verdict must also carry the screened text as a string: an allow with no
+        # text (or a non-string one) is a gateway that did not say what may be used, and is
+        # refused rather than letting a caller fall back to the unscreened original.
+        allowed = body.get("allowed") is True
+        sanitized = body.get("sanitized_text")
+        reason = str(body.get("reason", ""))
+        if allowed and not isinstance(sanitized, str):
+            return GuardrailVerdict(
+                allowed=False,
+                direction=direction,
+                findings=findings,
+                sanitized_text=None,
+                reason="blocked: the guardrail gateway allowed without returning the text to use",
+            )
         return GuardrailVerdict(
-            allowed=bool(body.get("allowed", False)),
+            allowed=allowed,
             direction=direction,
             findings=findings,
-            sanitized_text=body.get("sanitized_text"),
-            reason=str(body.get("reason", "")),
+            sanitized_text=sanitized if allowed else None,
+            reason=reason,
         )

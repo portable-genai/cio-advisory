@@ -160,12 +160,30 @@ class GuardrailFinding:
 
 @dataclass(frozen=True, slots=True)
 class GuardrailVerdict:
+    """What a guardrail screen decided about one direction of one generation call.
+
+    ``sanitized_text`` is the text to use going forward when ``allowed`` is True: it may equal
+    the input unchanged, and it may be shorter or EMPTY when the screen redacted it, and the
+    caller uses it exactly as given, never falling back to the unscreened original. It is
+    ``None`` when the call is blocked, because a blocked call has no safe text to substitute.
+    Both halves are enforced at construction, so a verdict that is allowed with no text (or
+    blocked with some) cannot exist for a caller to misread.
+    """
+
     allowed: bool
     direction: Direction
     findings: tuple[GuardrailFinding, ...] = ()
-    # Text after any inline sanitisation the guardrail applied (may equal input).
     sanitized_text: str | None = None
     reason: str = ""
+
+    def __post_init__(self) -> None:
+        if self.allowed and self.sanitized_text is None:
+            raise ValueError(
+                "an allowed GuardrailVerdict must carry the text to use going forward "
+                "(sanitized_text, the input unchanged when nothing was redacted)"
+            )
+        if not self.allowed and self.sanitized_text is not None:
+            raise ValueError("a blocked GuardrailVerdict carries no sanitized_text")
 
 
 @dataclass(frozen=True, slots=True)

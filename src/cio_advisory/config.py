@@ -273,6 +273,8 @@ class ControlSwitches:
 class ModelArmorSettings:
     template_id: str = "cio-advisory-guardrail"
     host: str = "modelarmor.asia-southeast1.rep.googleapis.com"
+    #: The deadline on every sanitize call. A timeout fails CLOSED (audited, then refused).
+    timeout_seconds: float = 10.0
 
 
 @dataclass(frozen=True)

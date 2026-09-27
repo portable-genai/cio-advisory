@@ -151,15 +151,24 @@ redaction.redact(inputs)
   -> gap_analysis.summarise (allocation gaps: arithmetic, no model call)
   -> house_view.retrieve (`enterprise-knowledge-base`)           [empty -> RetrievalEmptyError]
   -> gap_analysis.rank_by_relevance (order, never filter)
+  -> guardrail.screen(INPUT) on the assembled prompt, as sent  [blocked -> audit BLOCKED + raise]
   -> llm synthesise TalkingPoint[]  [model portfolio + gaps in the prompt context]
   -> SuitabilityPolicy.assess per point (drop/flag UNSUITABLE)
   -> attach the computed ThemeAlignment; drop holdings the client does not own
   -> compute PortfolioAlignment (gaps, theme links, uncovered gaps)
   -> attach not-advice disclaimer
-  -> guardrail.screen(OUTPUT)           [blocked -> audit BLOCKED + raise]
+  -> guardrail.screen(OUTPUT) on every shown string, citations too  [blocked -> audit BLOCKED + raise]
   -> CioReviewPolicy (always requires review; escalate on REVIEW/UNSUITABLE)
   -> audit.record(redacted prompt + response)
 ```
+
+Every screen fails closed. A guardrail that raises instead of deciding (a Model Armor error, or
+the `model_armor.timeout_seconds` deadline) is audited BLOCKED with `guardrail unavailable
+(<error>)` before its error reaches the caller. Model Armor allows only on `NO_MATCH_FOUND`
+from a screen whose `invocation_result` is `SUCCESS`: a skipped filter reports no match, so a
+`PARTIAL` or `FAILURE` screen is refused. The ADK callbacks screen what the model is sent (every
+user part and tool result) and write the screened text back, on the root agent and on the
+grounding sub-agent alike.
 
 ## 6. HTTP API (this repo DEFINES)
 
