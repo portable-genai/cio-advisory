@@ -99,10 +99,11 @@ run "a_fork_on_its_own_project_keeps_every_control" {
   command = plan
 
   variables {
-    cmek_enabled        = true
-    worm_locked         = true
-    access_policy_id    = "987654321098"
-    manage_audit_config = true
+    cmek_enabled                  = true
+    worm_locked                   = true
+    access_policy_id              = "987654321098"
+    manage_audit_config           = true
+    model_armor_full_capabilities = true
   }
 
   assert {
@@ -127,7 +128,7 @@ run "a_fork_on_its_own_project_keeps_every_control" {
 
   assert {
     condition     = length(google_model_armor_template.cio_guardrail.filter_config[0].malicious_uri_filter_settings) == 1
-    error_message = "With no override, the guardrail must ask for the malicious-URI filter."
+    error_message = "Stated true, the guardrail must ask for the malicious-URI filter."
   }
 
   assert {
@@ -148,6 +149,29 @@ run "a_fork_on_its_own_project_keeps_every_control" {
   assert {
     condition     = contains(google_org_policy_policy.restrict_cmek_projects[0].spec[0].rules[0].values[0].denied_values, "bigquery.googleapis.com")
     error_message = "The CMEK backstop must still cover the client book."
+  }
+}
+
+# Slice 7 of the 2026-09-23 posture rule: a control that is not irreversible defaults off in
+# code, so the regional capabilities arrive only when a deployment states them.
+run "guardrail_regional_capabilities_are_declined_unless_stated" {
+  command = plan
+
+  variables {
+    cmek_enabled        = true
+    worm_locked         = true
+    access_policy_id    = "987654321098"
+    manage_audit_config = true
+  }
+
+  assert {
+    condition     = length(google_model_armor_template.cio_guardrail.filter_config[0].malicious_uri_filter_settings) == 0
+    error_message = "model_armor_full_capabilities defaults to false: the malicious-URI filter arrives only when stated."
+  }
+
+  assert {
+    condition     = length(google_model_armor_template.cio_guardrail.template_metadata[0].multi_language_detection) == 0
+    error_message = "model_armor_full_capabilities defaults to false: multi-language detection arrives only when stated."
   }
 }
 
