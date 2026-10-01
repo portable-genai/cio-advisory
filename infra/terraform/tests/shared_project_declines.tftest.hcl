@@ -19,6 +19,10 @@ variables {
   # file were written under the old default, so the file states it; a run that sets one
   # explicitly still overrides it. posture_defaults.tftest.hcl pins the new default.
   enable_vpc_sc = true
+  # Slice 7 turned these reversible controls off by default on 2026-10-02. The runs in this
+  # file were written under the old default, so the file states it; a run that sets one
+  # explicitly still overrides it.
+  manage_org_policies = true
 }
 
 run "a_sibling_stack_in_a_shared_project_declines_what_it_does_not_own" {

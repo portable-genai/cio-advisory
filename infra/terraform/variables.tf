@@ -135,7 +135,7 @@ variable "worm_locked" {
 
 variable "manage_org_policies" {
   type        = bool
-  default     = true
+  default     = false
   description = <<-EOT
     Whether THIS stack writes the project's Org Policies (gcp.resourceLocations,
     compute.vmExternalIpAccess, storage.uniformBucketLevelAccess and
@@ -151,6 +151,9 @@ variable "manage_org_policies" {
     gcp.resourceLocations to those two and breaks every sibling that reaches another one, and
     restrictNonCmekServices refuses any sibling's BigQuery or Logging resource that is not
     CMEK-encrypted. Nothing in this stack's plan says so.
+
+    Off by default since 2026-10-02 (slice 7 of the posture rule: a control that is not
+    irreversible defaults off in code); terraform.tfvars.example states the production form.
   EOT
 }
 
