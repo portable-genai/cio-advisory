@@ -15,6 +15,10 @@ mock_provider "google-beta" {}
 variables {
   project_id = "fictional-wealth-project"
   org_id     = "123456789012"
+  # Slice 7 turned these reversible controls off by default on 2026-10-01. The runs in this
+  # file were written under the old default, so the file states it; a run that sets one
+  # explicitly still overrides it. posture_defaults.tftest.hcl pins the new default.
+  enable_vpc_sc = true
 }
 
 run "a_sibling_stack_in_a_shared_project_declines_what_it_does_not_own" {
